@@ -15,6 +15,33 @@ import app.db.models  # noqa: F401  (register all entities for relationships)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.APP_NAME} (env={settings.APP_ENV})")
+    # Auto-run migrations on startup (for Railway deployment)
+    try:
+        from alembic import command
+        from alembic.config import Config
+        import os
+        alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations applied successfully")
+    except Exception as e:
+        logger.warning(f"Migration failed (may already be applied): {e}")
+    # Auto-seed sample data if database is empty
+    try:
+        from app.db.session import SessionLocal
+        from app.db import models
+        db = SessionLocal()
+        try:
+            if db.query(models.Product).count() == 0:
+                logger.info("Database empty, running seed...")
+                from app.db.seed import seed
+                seed(db)
+                logger.info("Seed completed")
+            db.close()
+        except Exception:
+            db.close()
+            raise
+    except Exception as e:
+        logger.warning(f"Seed check failed: {e}")
     yield
     logger.info("Shutting down")
 
