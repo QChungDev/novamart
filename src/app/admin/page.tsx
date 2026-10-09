@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, Package, ShoppingCart, TrendingDown, TrendingUp, Wallet } from "lucide-react";
-import { useAdmin } from "@/lib/services/admin";
+import { useAdminData, adminActions } from "@/lib/services/admin";
 import { formatVND, formatDate } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/feedback";
@@ -20,7 +20,17 @@ const OrderStatusChart = dynamic(
 );
 
 export default function AdminDashboardPage() {
-  const { state, dashboard } = useAdmin();
+  const { data: dashboard, loading } = useAdminData(() => adminActions.getDashboard(), []);
+  const { data: productsData } = useAdminData(() => adminActions.getProducts(), []);
+
+  if (loading || !dashboard) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-72 w-full" />
+      </div>
+    );
+  }
 
   const stats = [
     {
@@ -54,7 +64,7 @@ export default function AdminDashboardPage() {
     },
   ];
 
-  const lowStockProducts = state.products
+  const lowStockProducts = (productsData ?? [])
     .filter((p) => p.stock <= 10)
     .sort((a, b) => a.stock - b.stock)
     .slice(0, 5);

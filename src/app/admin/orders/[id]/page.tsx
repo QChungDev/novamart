@@ -4,7 +4,7 @@ import { Suspense, use, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, Check } from "lucide-react";
-import { useAdmin } from "@/lib/services/admin";
+import { adminActions, useAdminData } from "@/lib/services/admin";
 import { useToast } from "@/lib/store/toast-store";
 import { formatVND, formatDateTime } from "@/lib/format";
 import { Breadcrumbs } from "@/components/ui/data";
@@ -29,11 +29,13 @@ const NEXT_STATUS: Partial<Record<OrderStatus, { next: OrderStatus; label: strin
 // Nội dung đọc params async nên bọc trong Suspense để không chặn prerender.
 function AdminOrderDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { state, actions } = useAdmin();
   const { toast } = useToast();
   const [confirming, setConfirming] = useState<OrderStatus | null>(null);
+  const { data: order, loading, reload } = useAdminData(() => adminActions.getOrderByCode(id), [id]);
 
-  const order = state.orders.find((o) => o.id === id);
+  if (loading) {
+    return <p className="py-12 text-center text-sm text-ink-400">Đang tải đơn hàng...</p>;
+  }
 
   if (!order) {
     return (
@@ -55,7 +57,8 @@ function AdminOrderDetailContent({ params }: { params: Promise<{ id: string }> }
   const canCancel = order.status === "pending" || order.status === "confirmed";
 
   const applyStatus = async (status: OrderStatus) => {
-    await actions.updateOrderStatus(order.id, status, `Admin cập nhật: ${orderStatusLabel(status)}`);
+    await adminActions.updateOrderStatus(order.id, status, `Admin cập nhật: ${orderStatusLabel(status)}`);
+    reload();
     toast(`Đã chuyển đơn ${order.code} sang "${orderStatusLabel(status)}".`);
     setConfirming(null);
   };

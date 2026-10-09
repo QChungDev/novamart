@@ -22,7 +22,7 @@ export function productToForm(p?: Product): ProductFormValue {
   return {
     name: p?.name ?? "",
     sku: p?.sku ?? "",
-    categoryId: p?.categoryId ?? "",
+    categoryId: p?.categoryId != null ? String(p.categoryId) : "",
     description: p?.description ?? "",
     price: p ? String(p.price) : "",
     salePrice: p?.salePrice ? String(p.salePrice) : "",

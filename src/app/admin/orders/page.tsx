@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
-import { useAdmin } from "@/lib/services/admin";
+import { adminActions, useAdminData } from "@/lib/services/admin";
 import { formatVND, formatDate } from "@/lib/format";
 import { OrderStatusBadge, paymentMethodLabel } from "@/components/ui/badge";
 import { DataTable, Pagination, Tabs, type Column } from "@/components/ui/data";
@@ -14,33 +14,25 @@ type Tab = "all" | OrderStatus;
 const PAGE_SIZE = 10;
 
 export default function AdminOrdersPage() {
-  const { state } = useAdmin();
   const [tab, setTab] = useState<Tab>("all");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
+  const { data } = useAdminData(
+    () => adminActions.getOrders({ status: tab === "all" ? undefined : tab, q, page, pageSize: PAGE_SIZE }),
+    [tab, q, page],
+  );
+  const filtered = data?.items ?? [];
+  const total = data?.total ?? 0;
 
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return state.orders.filter((o) => {
-      if (tab !== "all" && o.status !== tab) return false;
-      if (needle && !`${o.code} ${o.customerName} ${o.phone}`.toLowerCase().includes(needle))
-        return false;
-      return true;
-    });
-  }, [state.orders, tab, q]);
-
-  const countFor = (t: Tab) =>
-    t === "all" ? state.orders.length : state.orders.filter((o) => o.status === t).length;
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const pageItems = filtered;
 
   const columns: Column<Order>[] = [
     {
       key: "code",
       header: "Mã đơn",
       render: (o) => (
-        <Link href={`/admin/orders/${o.id}`} className="font-bold text-brand-700 hover:underline">
+        <Link href={`/admin/orders/${o.code}`} className="font-bold text-brand-700 hover:underline">
           {o.code}
         </Link>
       ),
@@ -87,7 +79,7 @@ export default function AdminOrdersPage() {
       <div>
         <h1 className="text-2xl font-extrabold text-ink-900">Đơn hàng</h1>
         <p className="mt-1 text-sm text-ink-500">
-          {state.orders.length} đơn hàng · cập nhật trạng thái demo
+          {total} đơn hàng
         </p>
       </div>
 
@@ -98,12 +90,12 @@ export default function AdminOrdersPage() {
           setPage(1);
         }}
         tabs={[
-          { value: "all", label: "Tất cả", count: countFor("all") },
-          { value: "pending", label: "Chờ xác nhận", count: countFor("pending") },
-          { value: "confirmed", label: "Đã xác nhận", count: countFor("confirmed") },
-          { value: "shipping", label: "Đang giao", count: countFor("shipping") },
-          { value: "delivered", label: "Đã giao", count: countFor("delivered") },
-          { value: "cancelled", label: "Đã hủy", count: countFor("cancelled") },
+          { value: "all", label: "Tất cả" },
+          { value: "pending", label: "Chờ xác nhận" },
+          { value: "confirmed", label: "Đã xác nhận" },
+          { value: "shipping", label: "Đang giao" },
+          { value: "delivered", label: "Đã giao" },
+          { value: "cancelled", label: "Đã hủy" },
         ]}
       />
 

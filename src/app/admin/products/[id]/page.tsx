@@ -4,7 +4,7 @@ import { Suspense, use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { useAdmin } from "@/lib/services/admin";
+import { adminActions, useAdminData } from "@/lib/services/admin";
 import { useToast } from "@/lib/store/toast-store";
 import { Breadcrumbs } from "@/components/ui/data";
 import { EmptyState } from "@/components/ui/feedback";
@@ -14,11 +14,19 @@ import { ProductForm, productToForm, type ProductFormValue } from "@/components/
 function EditProductContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { state, actions } = useAdmin();
-  const { toast } = useToast();
-  const [submitting, setSubmitting] = useState(false);
 
-  const product = state.products.find((p) => p.id === id);
+  const { toast } = useToast();
+  const { data: categories } = useAdminData(() => adminActions.getCategories(), []);
+  const [submitting, setSubmitting] = useState(false);
+  const numericId = Number(id);
+  const { data: product, loading } = useAdminData(
+    () => adminActions.getProductById(numericId),
+    [numericId],
+  );
+
+  if (loading) {
+    return <p className="py-12 text-center text-sm text-ink-400">Đang tải sản phẩm...</p>;
+  }
 
   if (!product) {
     return (
@@ -40,11 +48,11 @@ function EditProductContent({ params }: { params: Promise<{ id: string }> }) {
   const handleSubmit = (v: ProductFormValue) => {
     setSubmitting(true);
     setTimeout(async () => {
-      await actions.saveProduct({
+      await adminActions.saveProduct({
         ...product,
         name: v.name.trim(),
         sku: v.sku.trim(),
-        categoryId: v.categoryId,
+        categoryId: Number(v.categoryId) || null,
         description: v.description.trim(),
         price: Number(v.price),
         salePrice: v.salePrice ? Number(v.salePrice) : undefined,
@@ -77,7 +85,7 @@ function EditProductContent({ params }: { params: Promise<{ id: string }> }) {
       </div>
       <ProductForm
         initial={productToForm(product)}
-        categories={state.categories}
+        categories={categories ?? []}
         onSubmit={handleSubmit}
         submitLabel="Lưu thay đổi"
         submitting={submitting}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { useAdmin } from "@/lib/services/admin";
+import { adminActions, useAdminData } from "@/lib/services/admin";
 import { useToast } from "@/lib/store/toast-store";
 import { Breadcrumbs } from "@/components/ui/data";
 import { ProductForm, productToForm, type ProductFormValue } from "@/components/admin/ProductForm";
@@ -13,11 +13,11 @@ import type { Product } from "@/lib/types";
 function toProduct(v: ProductFormValue): Product {
   const now = new Date().toISOString();
   return {
-    id: `p-${Date.now().toString(36)}`,
+    id: 0,
     name: v.name.trim(),
     slug: `${v.name.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now().toString(36)}`,
     sku: v.sku.trim(),
-    categoryId: v.categoryId,
+    categoryId: Number(v.categoryId) || null,
     price: Number(v.price),
     salePrice: v.salePrice ? Number(v.salePrice) : undefined,
     images: v.images,
@@ -36,14 +36,15 @@ function toProduct(v: ProductFormValue): Product {
 
 export default function NewProductPage() {
   const router = useRouter();
-  const { state, actions } = useAdmin();
+
   const { toast } = useToast();
+  const { data: categories } = useAdminData(() => adminActions.getCategories(), []);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = (v: ProductFormValue) => {
     setSubmitting(true);
     setTimeout(async () => {
-      await actions.saveProduct(toProduct(v));
+      await adminActions.saveProduct(toProduct(v));
       toast("Thêm sản phẩm mới thành công!");
       router.push("/admin/products");
     }, 500);
@@ -69,7 +70,7 @@ export default function NewProductPage() {
       </div>
       <ProductForm
         initial={productToForm()}
-        categories={state.categories}
+        categories={categories ?? []}
         onSubmit={handleSubmit}
         submitLabel="Thêm sản phẩm"
         submitting={submitting}

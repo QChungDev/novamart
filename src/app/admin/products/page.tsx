@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
-import { useAdmin } from "@/lib/services/admin";
+import { adminActions, useAdminData } from "@/lib/services/admin";
 import { useToast } from "@/lib/store/toast-store";
 import { formatVND } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
@@ -18,29 +18,33 @@ import type { Product } from "@/lib/types";
 const PAGE_SIZE = 10;
 
 export default function AdminProductsPage() {
-  const { state, actions } = useAdmin();
   const { toast } = useToast();
+  const { data: products, reload } = useAdminData(() => adminActions.getProducts(), []);
+  const { data: categories } = useAdminData(() => adminActions.getCategories(), []);
   const [q, setQ] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [deleting, setDeleting] = useState<Product | null>(null);
 
+  const allProducts = useMemo(() => products ?? [], [products]);
+  const allCategories = categories ?? [];
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return state.products.filter((p) => {
+    return allProducts.filter((p) => {
       if (needle && !`${p.name} ${p.sku}`.toLowerCase().includes(needle)) return false;
-      if (categoryId && p.categoryId !== categoryId) return false;
+      if (categoryId && String(p.categoryId) !== categoryId) return false;
       if (status && p.status !== status) return false;
       return true;
     });
-  }, [state.products, q, categoryId, status]);
+  }, [allProducts, q, categoryId, status]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const catName = (id: string) =>
-    state.categories.find((c) => c.id === id)?.name ?? "—";
+  const catName = (id: number | null) =>
+    allCategories.find((c) => c.id === id)?.name ?? "—";
 
   const columns: Column<Product>[] = [
     {
@@ -159,7 +163,7 @@ export default function AdminProductsPage() {
           className="h-10 cursor-pointer rounded-xl border border-slate-200 px-3 text-sm focus:border-brand-500 focus:outline-none"
         >
           <option value="">Tất cả danh mục</option>
-          {state.categories.map((c) => (
+          {allCategories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
@@ -196,7 +200,7 @@ export default function AdminProductsPage() {
         onClose={() => setDeleting(null)}
         onConfirm={async () => {
           if (deleting) {
-            await actions.deleteProduct(deleting.id);
+            await adminActions.deleteProduct(deleting.id); reload();
             toast(`Đã xóa sản phẩm "${deleting.name}".`, "info");
             setDeleting(null);
           }
