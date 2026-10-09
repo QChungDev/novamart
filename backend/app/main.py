@@ -51,6 +51,40 @@ async def lifespan(app: FastAPI):
             raise
     except Exception as e:
         logger.warning(f"Seed check failed: {e}")
+    # Auto-create admin from env vars (ADMIN_EMAIL/ADMIN_PASSWORD) if not exists
+    try:
+        import os as _os2
+        _admin_email = _os2.getenv("ADMIN_EMAIL", "").strip().lower()
+        _admin_password = _os2.getenv("ADMIN_PASSWORD", "")
+        if _admin_email and _admin_password:
+            from app.db.session import SessionLocal as _SessionLocal2
+            from app.db import models as _models2
+            from app.core.security import hash_password as _hash_pw
+            _db2 = _SessionLocal2()
+            try:
+                _existing = _db2.query(_models2.User).filter_by(email=_admin_email).first()
+                if _existing:
+                    if _existing.role != "admin":
+                        _existing.role = "admin"
+                        _db2.commit()
+                        logger.info(f"Promoted {_admin_email} to admin")
+                else:
+                    _admin = _models2.User(
+                        email=_admin_email,
+                        password_hash=_hash_pw(_admin_password),
+                        full_name="Administrator",
+                        role="admin",
+                        is_active=True,
+                    )
+                    _db2.add(_admin)
+                    _db2.commit()
+                    logger.info(f"Admin account {_admin_email} created")
+                _db2.close()
+            except Exception:
+                _db2.close()
+                raise
+    except Exception as e:
+        logger.warning(f"Admin bootstrap failed: {e}")
     yield
     logger.info("Shutting down")
 
