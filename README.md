@@ -1,8 +1,10 @@
-# NovaMart — Website Thương Mại Điện Tử (Phase 1: Frontend Prototype)
+# NovaMart — Website Thương Mại Điện Tử (Full-stack)
 
 NovaMart là website thương mại điện tử hoàn chỉnh gồm **storefront cho khách hàng** và **admin dashboard**, xây dựng bằng Next.js (App Router) + TypeScript + Tailwind CSS. Toàn bộ giao diện tiếng Việt, giá tiền định dạng VND, dữ liệu sản phẩm công nghệ thực tế tại Việt Nam.
 
-> **Phase 1 — Frontend UI & prototype interactions.** Mọi dữ liệu là **dữ liệu mẫu (mock)** lưu trên `localStorage` của trình duyệt, được ghi nhãn rõ ràng là demo. Chưa có backend thật, chưa có thanh toán thật, chưa deploy production.
+> **Phase 2 — Full-stack với backend thật.** Frontend Next.js gọi **FastAPI backend** (`backend/`) qua `NEXT_PUBLIC_API_BASE_URL`. 
+> Dữ liệu thật lưu trong **MySQL**: sản phẩm, danh mục, giỏ hàng, đơn hàng, tồn kho, coupons, users.
+> Auth dùng **JWT** (access + refresh token), phân quyền **customer/admin** ở server.
 
 ## Tính năng
 
@@ -34,8 +36,34 @@ NovaMart là website thương mại điện tử hoàn chỉnh gồm **storefron
 | Icons | Lucide |
 | Charts | Recharts |
 | Dữ liệu Phase 1 | Mock data + `localStorage` (prototype, **không phải database**) |
+| Backend (Phase 2) | FastAPI + SQLAlchemy 2.x + MySQL + Alembic + Pytest |
+| Auth (Phase 2) | JWT (access 30p + refresh 7 ngày), bcrypt, RBAC customer/admin |
 
-## Cài đặt & chạy
+## Chạy Full-stack (Frontend + Backend)
+
+### 1. Backend (FastAPI + MySQL)
+
+```bash
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # sửa DATABASE_URL, SECRET_KEY
+alembic upgrade head   # chạy migrations
+python -m app.db.seed  # seed dữ liệu mẫu
+python -m app.db.create_admin --email admin@novamart.vn  # tạo admin
+uvicorn app.main:app --reload --port 8000
+```
+Chi tiết: xem [backend/README.md](backend/README.md). Swagger: http://localhost:8000/docs
+
+### 2. Frontend (Next.js)
+
+```bash
+# .env.local
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+npm run dev
+```
+
+## Cài đặt & chạy (Frontend only)
 
 Yêu cầu: Node.js ≥ 20.
 
