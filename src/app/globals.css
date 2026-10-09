@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-be-vn);
+}
+
+@theme {
+  /* Dark navy text scale */
+  --color-ink-950: #0a142e;
+  --color-ink-900: #101d3f;
+  --color-ink-800: #1b2c55;
+  --color-ink-700: #2a3d68;
+  --color-ink-600: #3b4d76;
+  --color-ink-500: #5b6b8c;
+  --color-ink-400: #8b96b3;
+
+  /* Refined blue accent scale */
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dbe7ff;
+  --color-brand-200: #bfd4ff;
+  --color-brand-300: #93b4fd;
+  --color-brand-400: #608dfa;
+  --color-brand-500: #2f6df6;
+  --color-brand-600: #1f5ae0;
+  --color-brand-700: #1a4bb8;
+  --color-brand-800: #1a3f92;
+  --color-brand-900: #1a3572;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #ffffff;
+  color: var(--color-ink-900);
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background-color: var(--color-brand-100);
+}
+
+/* Subtle scrollbar for horizontal scrollers */
+.nice-scroll::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.nice-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-ink-400);
+  border-radius: 9999px;
+}
+.nice-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Hide number input arrows for quantity fields */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
