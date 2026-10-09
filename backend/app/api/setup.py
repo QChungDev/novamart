@@ -19,7 +19,7 @@ class BootstrapAdminRequest(BaseModel):
     token: str
     email: str = "admin@novamart.vn"
     password: str
-    full_name: str = "Administrator"
+    name: str = "Administrator"
 
 
 @router.post("/bootstrap-admin")
@@ -37,7 +37,7 @@ def bootstrap_admin(payload: BootstrapAdminRequest, db: Session = Depends(get_db
     admin = models.User(
         email=email,
         password_hash=hash_password(payload.password),
-        full_name=payload.full_name,
+        name=payload.name,
         role="admin",
         is_active=True,
     )
