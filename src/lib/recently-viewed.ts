@@ -5,10 +5,10 @@
 const KEY = "novamart-recent-v1";
 const MAX = 8;
 
-export function pushRecentView(productId: string): void {
+export function pushRecentView(productId: number): void {
   try {
     const raw = window.localStorage.getItem(KEY);
-    const list: string[] = raw ? JSON.parse(raw) : [];
+    const list: number[] = raw ? JSON.parse(raw) : [];
     const next = [productId, ...list.filter((id) => id !== productId)].slice(0, MAX);
     window.localStorage.setItem(KEY, JSON.stringify(next));
   } catch {
@@ -16,10 +16,10 @@ export function pushRecentView(productId: string): void {
   }
 }
 
-export function getRecentViews(excludeId?: string): string[] {
+export function getRecentViews(excludeId?: number): number[] {
   try {
     const raw = window.localStorage.getItem(KEY);
-    const list: string[] = raw ? JSON.parse(raw) : [];
+    const list: number[] = raw ? JSON.parse(raw) : [];
     return excludeId ? list.filter((id) => id !== excludeId) : list;
   } catch {
     return [];

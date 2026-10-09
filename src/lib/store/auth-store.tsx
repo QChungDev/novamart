@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * Auth store — real JWT authentication against FastAPI backend.
+ *
+ * - Login/register via /api/v1/auth/*
+ * - Access + refresh tokens in localStorage (via api/client tokenStore)
+ * - User profile fetched from /api/v1/auth/me
+ */
+
 import {
   createContext,
   useCallback,
@@ -8,21 +16,20 @@ import {
   useMemo,
   useState,
 } from "react";
+import { api, tokenStore, ApiError, isApiConfigured } from "@/lib/api/client";
 import type { AuthUser } from "@/lib/types";
 
 interface AuthContextValue {
   user: AuthUser | null;
+  isAdmin: boolean;
   loading: boolean;
-  /** Mock login — accepts any email/password, or the demo account. */
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
-  updateProfile: (patch: Partial<AuthUser>) => void;
+  updateProfile: (patch: Partial<AuthUser>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-const STORAGE_KEY = "novamart-auth-v1";
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
@@ -30,83 +37,121 @@ export function useAuth() {
   return ctx;
 }
 
-function readStored(): AuthUser | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as AuthUser) : null;
-  } catch {
-    return null;
-  }
+interface BackendUser {
+  id: number;
+  email: string;
+  name: string;
+  phone: string;
+  role: string;
+}
+
+function toAuthUser(u: BackendUser): AuthUser {
+  return { id: u.id, name: u.name, email: u.email, phone: u.phone || "" };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [role, setRole] = useState<string>("customer");
   const [loading, setLoading] = useState(true);
 
+  // On mount: if tokens exist, fetch profile.
   useEffect(() => {
-    // Hydrate from localStorage after mount to avoid SSR hydration mismatch.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setUser(readStored());
-    setLoading(false);
+    let alive = true;
+    (async () => {
+      try {
+        if (isApiConfigured() && tokenStore.getAccess()) {
+          const me = await api.get<BackendUser>("/api/v1/auth/me");
+          if (alive) {
+            setUser(toAuthUser(me));
+            setRole(me.role);
+          }
+        }
+      } catch {
+        tokenStore.clear();
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const persist = (u: AuthUser | null) => {
-    setUser(u);
-    try {
-      if (u) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
-      else window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* ignore */
-    }
-  };
+  // Global 401 handler -> logout.
+  useEffect(() => {
+    const handler = () => {
+      setUser(null);
+      setRole("customer");
+    };
+    window.addEventListener("novamart:unauthorized", handler);
+    return () => window.removeEventListener("novamart:unauthorized", handler);
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    await new Promise((r) => setTimeout(r, 700)); // mock latency
     if (!email.includes("@")) throw new Error("Email không hợp lệ.");
     if (password.length < 6) throw new Error("Mật khẩu phải có ít nhất 6 ký tự.");
-    // Demo account gets a friendly name; anything else derives from email.
-    const name =
-      email.toLowerCase() === "customer@novamart.vn"
-        ? "Khách hàng Demo"
-        : email.split("@")[0].replace(/[._-]+/g, " ");
-    persist({
-      id: "u-demo",
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      email,
-      phone: "0903123456",
-    });
+    try {
+      const data = await api.post<{
+        user: BackendUser;
+        tokens: { access_token: string; refresh_token: string };
+      }>("/api/v1/auth/login", { email, password }, { auth: false });
+      tokenStore.set(data.tokens.access_token, data.tokens.refresh_token);
+      setUser(toAuthUser(data.user));
+      setRole(data.user.role);
+    } catch (e) {
+      if (e instanceof ApiError) throw new Error(e.message);
+      throw e;
+    }
   }, []);
 
   const register = useCallback(async (name: string, email: string, password: string) => {
-    await new Promise((r) => setTimeout(r, 700));
     if (name.trim().length < 2) throw new Error("Vui lòng nhập họ tên.");
     if (!email.includes("@")) throw new Error("Email không hợp lệ.");
     if (password.length < 6) throw new Error("Mật khẩu phải có ít nhất 6 ký tự.");
-    persist({ id: "u-demo", name: name.trim(), email, phone: "" });
+    try {
+      const data = await api.post<{
+        user: BackendUser;
+        tokens: { access_token: string; refresh_token: string };
+      }>(
+        "/api/v1/auth/register",
+        { name: name.trim(), email, password },
+        { auth: false },
+      );
+      tokenStore.set(data.tokens.access_token, data.tokens.refresh_token);
+      setUser(toAuthUser(data.user));
+      setRole(data.user.role);
+    } catch (e) {
+      if (e instanceof ApiError) throw new Error(e.message);
+      throw e;
+    }
   }, []);
 
-  const logout = useCallback(() => persist(null), []);
+  const logout = useCallback(() => {
+    tokenStore.clear();
+    setUser(null);
+    setRole("customer");
+    api.post("/api/v1/auth/logout", {}).catch(() => {});
+  }, []);
 
-  const updateProfile = useCallback(
-    (patch: Partial<AuthUser>) => {
-      setUser((prev) => {
-        if (!prev) return prev;
-        const next = { ...prev, ...patch };
-        try {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-        } catch {
-          /* ignore */
-        }
-        return next;
-      });
-    },
-    [],
-  );
+  const updateProfile = useCallback(async (patch: Partial<AuthUser>) => {
+    const data = await api.patch<BackendUser>("/api/v1/users/me", {
+      name: patch.name,
+      phone: patch.phone,
+    });
+    setUser(toAuthUser(data));
+  }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout, updateProfile }),
-    [user, loading, login, register, logout, updateProfile],
+    () => ({
+      user,
+      isAdmin: role === "admin",
+      loading,
+      login,
+      register,
+      logout,
+      updateProfile,
+    }),
+    [user, role, loading, login, register, logout, updateProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

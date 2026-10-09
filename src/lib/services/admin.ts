@@ -1,18 +1,15 @@
 "use client";
 
 /**
- * Admin service — async mutations/queries over the unified store.
+ * Admin service — mutations/queries via FastAPI backend (admin endpoints).
  *
- * Điểm 1 (review): dùng chung store với shop (src/lib/data/store.ts) nên
- * mọi thay đổi ở Admin hiện ngay ra cửa hàng.
- * Điểm 2 (review): mọi thao tác đều async (Promise) — Phase 2 đổi ruột
- * thành fetch() FastAPI mà không sửa call sites.
- * Điểm 3 (review): auth hiện tại chỉ là mô phỏng phía client; Phase 2 sẽ
- * xác thực + phân quyền ở backend trên từng API.
+ * Phase 2: tất cả qua /api/v1/* với JWT admin. Không còn localStorage.
  */
 
-import { getStoreState, mutate, resetStore, uid, useStoreState, useStoreVersion } from "../data/store";
+import { useCallback, useEffect, useState } from "react";
+import { api } from "../api/client";
 import type {
+  Address,
   Category,
   Coupon,
   Customer,
@@ -21,233 +18,469 @@ import type {
   OrderStatus,
   Product,
   StockMovement,
-  StoreSettings,
 } from "../types";
-import type { StoreState as StoreStateType } from "../data/store";
+
+/* ------------------------------- Mappers ------------------------------------ */
+
+function toProduct(p: Record<string, unknown>): Product {
+  return {
+    id: p.id as number,
+    name: p.name as string,
+    slug: p.slug as string,
+    sku: p.sku as string,
+    categoryId: (p.category_id as number | null) ?? null,
+    price: Number(p.price),
+    salePrice: p.sale_price != null ? Number(p.sale_price) : undefined,
+    images: (p.images as string[]) || [],
+    rating: p.rating as number,
+    reviewCount: p.review_count as number,
+    stock: p.stock as number,
+    sold: p.sold as number,
+    description: p.description as string,
+    specs: (p.specs as { label: string; value: string }[]) || [],
+    tags: (p.tags as string[]) || [],
+    isFeatured: p.is_featured as boolean,
+    status: p.status as Product["status"],
+    createdAt: p.created_at as string,
+  };
+}
+
+function toCategory(c: Record<string, unknown>): Category {
+  return {
+    id: c.id as number,
+    name: c.name as string,
+    slug: c.slug as string,
+    image: c.image as string,
+    description: c.description as string,
+  };
+}
+
+function toOrder(o: Record<string, unknown>): Order {
+  const items = (o.items as Record<string, unknown>[]).map((i) => ({
+    productId: i.product_id as number,
+    name: i.name as string,
+    image: i.image as string,
+    price: Number(i.price),
+    quantity: i.quantity as number,
+  }));
+  const timeline = (o.timeline as Record<string, unknown>[]).map((t) => ({
+    status: t.status as OrderStatus,
+    at: t.created_at as string,
+    note: t.note as string | undefined,
+  }));
+  return {
+    id: o.id as number,
+    code: o.code as string,
+    customerId: (o as { user_id?: number }).user_id,
+    customerName: o.customer_name as string,
+    phone: o.phone as string,
+    email: o.email as string,
+    street: o.street as string,
+    district: o.district as string,
+    city: o.city as string,
+    note: o.note as string,
+    items,
+    subtotal: Number(o.subtotal),
+    shippingFee: Number(o.shipping_fee),
+    discount: Number(o.discount),
+    total: Number(o.total),
+    couponCode: (o.coupon_code as string) || undefined,
+    status: o.status as OrderStatus,
+    paymentMethod: o.payment_method as Order["paymentMethod"],
+    shippingMethod: o.shipping_method as Order["shippingMethod"],
+    createdAt: o.created_at as string,
+    timeline,
+  };
+}
+
+function toCoupon(c: Record<string, unknown>): Coupon {
+  const status = (c.is_active as boolean) ? "active" : "inactive";
+  return {
+    id: c.id as number,
+    code: c.code as string,
+    description: c.description as string,
+    type: c.type as Coupon["type"],
+    value: Number(c.value),
+    minOrder: Number(c.min_order),
+    usageLimit: c.usage_limit as number,
+    used: c.used as number,
+    startDate: c.start_date as string,
+    endDate: c.end_date as string,
+    status: status as Coupon["status"],
+  };
+}
+
+function toCustomer(u: Record<string, unknown>): Customer {
+  return {
+    id: u.id as number,
+    name: u.name as string,
+    email: u.email as string,
+    phone: (u.phone as string) || "",
+    city: "",
+    totalOrders: (u.total_orders as number) || 0,
+    totalSpent: (u.total_spent as number) || 0,
+    joinedAt: u.created_at as string,
+    status: (u.is_active as boolean) ? "active" : "blocked",
+  };
+}
+
+function toMovement(m: Record<string, unknown>): StockMovement {
+  return {
+    id: m.id as number,
+    productId: m.product_id as number,
+    type: m.type as StockMovement["type"],
+    quantity: m.quantity as number,
+    reason: m.reason as string,
+    createdAt: m.created_at as string,
+    createdBy: m.created_by as string,
+  };
+}
 
 /* --------------------------------- Actions ---------------------------------- */
 
+function productPayload(p: Product): Record<string, unknown> {
+  return {
+    name: p.name,
+    slug: p.slug,
+    sku: p.sku,
+    category_id: p.categoryId,
+    description: p.description,
+    price: p.price,
+    sale_price: p.salePrice ?? null,
+    stock: p.stock,
+    images: p.images,
+    specs: p.specs,
+    tags: p.tags,
+    is_featured: p.isFeatured,
+    status: p.status,
+  };
+}
+
 export const adminActions = {
-  async saveProduct(p: Product): Promise<void> {
-    mutate((s) => {
-      const exists = s.products.some((x) => x.id === p.id);
-      return {
-        products: exists
-          ? s.products.map((x) => (x.id === p.id ? p : x))
-          : [{ ...p, id: p.id || uid("p") }, ...s.products],
-      };
+  async saveProduct(p: Product): Promise<Product> {
+    if (p.id) {
+      const data = await api.patch<Record<string, unknown>>(
+        `/api/v1/products/${p.id}`,
+        productPayload(p),
+      );
+      return toProduct(data);
+    }
+    const data = await api.post<Record<string, unknown>>(
+      "/api/v1/products",
+      productPayload(p),
+    );
+    return toProduct(data);
+  },
+
+  async deleteProduct(id: number): Promise<void> {
+    await api.delete(`/api/v1/products/${id}`);
+  },
+
+  async saveCategory(c: Category): Promise<Category> {
+    const payload = {
+      name: c.name,
+      slug: c.slug,
+      image: c.image,
+      description: c.description,
+    };
+    if (c.id) {
+      const data = await api.patch<Record<string, unknown>>(
+        `/api/v1/categories/${c.id}`,
+        payload,
+      );
+      return toCategory(data);
+    }
+    const data = await api.post<Record<string, unknown>>("/api/v1/categories", payload);
+    return toCategory(data);
+  },
+
+  async deleteCategory(id: number): Promise<void> {
+    await api.delete(`/api/v1/categories/${id}`);
+  },
+
+  async updateOrderStatus(id: number, status: OrderStatus, note?: string): Promise<Order> {
+    const data = await api.patch<Record<string, unknown>>(
+      `/api/v1/orders/${id}/status`,
+      { status, note: note || "" },
+    );
+    return toOrder(data);
+  },
+
+  async saveCoupon(c: Coupon): Promise<Coupon> {
+    const payload = {
+      code: c.code.toUpperCase(),
+      description: c.description,
+      type: c.type,
+      value: c.value,
+      min_order: c.minOrder,
+      usage_limit: c.usageLimit,
+      start_date: c.startDate,
+      end_date: c.endDate,
+      is_active: c.status === "active",
+    };
+    if (c.id) {
+      const data = await api.patch<Record<string, unknown>>(
+        `/api/v1/coupons/${c.id}`,
+        payload,
+      );
+      return toCoupon(data);
+    }
+    const data = await api.post<Record<string, unknown>>("/api/v1/coupons", payload);
+    return toCoupon(data);
+  },
+
+  async deleteCoupon(id: number): Promise<void> {
+    await api.delete(`/api/v1/coupons/${id}`);
+  },
+
+  async setCustomerStatus(id: number, status: Customer["status"]): Promise<void> {
+    await api.patch(`/api/v1/users/${id}`, { is_active: status === "active" });
+  },
+
+  async receiveStock(productId: number, quantity: number, reason: string): Promise<void> {
+    await api.post("/api/v1/inventory/receive", {
+      product_id: productId,
+      quantity: Math.abs(quantity),
+      reason,
     });
   },
 
-  async deleteProduct(id: string): Promise<void> {
-    mutate((s) => ({ products: s.products.filter((p) => p.id !== id) }));
-  },
-
-  async saveCategory(c: Category): Promise<void> {
-    mutate((s) => {
-      const exists = s.categories.some((x) => x.id === c.id);
-      return {
-        categories: exists
-          ? s.categories.map((x) => (x.id === c.id ? c : x))
-          : [{ ...c, id: c.id || uid("c") }, ...s.categories],
-      };
+  async adjustStock(productId: number, newStock: number, reason: string): Promise<void> {
+    await api.post("/api/v1/inventory/adjust", {
+      product_id: productId,
+      new_stock: newStock,
+      reason,
     });
-  },
-
-  async deleteCategory(id: string): Promise<void> {
-    mutate((s) => ({
-      categories: s.categories.filter((c) => c.id !== id),
-      products: s.products.map((p) =>
-        p.categoryId === id ? { ...p, categoryId: "" } : p,
-      ),
-    }));
-  },
-
-  async createOrder(order: Order): Promise<void> {
-    mutate((s) => ({
-      orders: [{ ...order, id: order.id || uid("o") }, ...s.orders],
-    }));
-  },
-
-  async updateOrderStatus(id: string, status: OrderStatus, note?: string): Promise<void> {
-    mutate((s) => ({
-      orders: s.orders.map((o) =>
-        o.id === id
-          ? {
-              ...o,
-              status,
-              timeline: [...o.timeline, { status, at: new Date().toISOString(), note }],
-            }
-          : o,
-      ),
-    }));
-  },
-
-  async saveCoupon(c: Coupon): Promise<void> {
-    mutate((s) => {
-      const exists = s.coupons.some((x) => x.id === c.id);
-      return {
-        coupons: exists
-          ? s.coupons.map((x) => (x.id === c.id ? c : x))
-          : [{ ...c, id: c.id || uid("cp") }, ...s.coupons],
-      };
-    });
-  },
-
-  async deleteCoupon(id: string): Promise<void> {
-    mutate((s) => ({ coupons: s.coupons.filter((c) => c.id !== id) }));
-  },
-
-  async setCustomerStatus(id: string, status: Customer["status"]): Promise<void> {
-    mutate((s) => ({
-      customers: s.customers.map((c) => (c.id === id ? { ...c, status } : c)),
-    }));
-  },
-
-  /** Receive new stock (+) for a product. */
-  async receiveStock(productId: string, quantity: number, reason: string): Promise<void> {
-    mutate((s) => {
-      const movement: StockMovement = {
-        id: uid("sm"),
-        productId,
-        type: "in",
-        quantity: Math.abs(quantity),
-        reason,
-        createdAt: new Date().toISOString(),
-        createdBy: "admin",
-      };
-      return {
-        movements: [movement, ...s.movements],
-        products: s.products.map((p) =>
-          p.id === productId ? { ...p, stock: p.stock + Math.abs(quantity) } : p,
-        ),
-      };
-    });
-  },
-
-  /** Adjust stock to an absolute value (records the delta). */
-  async adjustStock(productId: string, newStock: number, reason: string): Promise<void> {
-    mutate((s) => {
-      const product = s.products.find((p) => p.id === productId);
-      if (!product) return;
-      const delta = newStock - product.stock;
-      if (delta === 0) return;
-      const movement: StockMovement = {
-        id: uid("sm"),
-        productId,
-        type: "adjust",
-        quantity: delta,
-        reason,
-        createdAt: new Date().toISOString(),
-        createdBy: "admin",
-      };
-      return {
-        movements: [movement, ...s.movements],
-        products: s.products.map((p) =>
-          p.id === productId ? { ...p, stock: newStock } : p,
-        ),
-      };
-    });
-  },
-
-  async updateSettings(patch: Partial<StoreSettings>): Promise<void> {
-    mutate((s) => ({ settings: { ...s.settings, ...patch } }));
-  },
-
-  async resetDemo(): Promise<void> {
-    resetStore();
   },
 
   /* ------------------------------- Read-only -------------------------------- */
 
   async getProducts(): Promise<Product[]> {
-    return getStoreState().products;
+    const data = await api.get<{ items: Record<string, unknown>[] }>(
+      "/api/v1/products?page_size=100&sort=newest",
+    );
+    return data.items.map(toProduct);
   },
 
-  async getProductById(id: string): Promise<Product | undefined> {
-    return getStoreState().products.find((p) => p.id === id);
+  async getProductById(id: number): Promise<Product | undefined> {
+    const products = await this.getProducts();
+    return products.find((p) => p.id === id);
   },
 
   async getCategories(): Promise<Category[]> {
-    return getStoreState().categories;
+    const data = await api.get<Record<string, unknown>[]>("/api/v1/categories");
+    return data.map(toCategory);
   },
 
-  async getOrders(): Promise<Order[]> {
-    return getStoreState().orders;
+  async getOrders(params?: {
+    status?: string;
+    q?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ items: Order[]; total: number }> {
+    const sp = new URLSearchParams();
+    if (params?.status) sp.set("status", params.status);
+    if (params?.q) sp.set("q", params.q);
+    sp.set("page", String(params?.page ?? 1));
+    sp.set("page_size", String(params?.pageSize ?? 50));
+    const data = await api.get<{ items: Record<string, unknown>[]; total: number }>(
+      `/api/v1/orders?${sp.toString()}`,
+    );
+    return { items: data.items.map(toOrder), total: data.total };
   },
 
-  async getOrderById(id: string): Promise<Order | undefined> {
-    return getStoreState().orders.find((o) => o.id === id);
+  async getOrderByCode(code: string): Promise<Order> {
+    const data = await api.get<Record<string, unknown>>(
+      `/api/v1/orders/${encodeURIComponent(code)}`,
+    );
+    return toOrder(data);
   },
 
   async getCoupons(): Promise<Coupon[]> {
-    return getStoreState().coupons;
+    const data = await api.get<{ items: Record<string, unknown>[] }>(
+      "/api/v1/coupons?page_size=100",
+    );
+    return data.items.map(toCoupon);
   },
 
-  async getCustomers(): Promise<Customer[]> {
-    return getStoreState().customers;
+  async getCustomers(params?: { q?: string; page?: number }): Promise<{ items: Customer[]; total: number }> {
+    const sp = new URLSearchParams();
+    if (params?.q) sp.set("q", params.q);
+    sp.set("page", String(params?.page ?? 1));
+    sp.set("page_size", "50");
+    const data = await api.get<{ items: Record<string, unknown>[]; total: number }>(
+      `/api/v1/users?${sp.toString()}`,
+    );
+    return { items: data.items.map(toCustomer), total: data.total };
   },
 
-  async getMovements(): Promise<StockMovement[]> {
-    return getStoreState().movements;
+  async getMovements(productId?: number): Promise<StockMovement[]> {
+    const sp = new URLSearchParams();
+    if (productId) sp.set("product_id", String(productId));
+    sp.set("page_size", "100");
+    const data = await api.get<{ items: Record<string, unknown>[] }>(
+      `/api/v1/inventory/movements?${sp.toString()}`,
+    );
+    return data.items.map(toMovement);
   },
 
-  async getSettings(): Promise<StoreSettings> {
-    return getStoreState().settings;
+  async getStockLevels(params?: {
+    lowOnly?: boolean;
+    q?: string;
+  }): Promise<{ productId: number; stock: number }[]> {
+    const sp = new URLSearchParams();
+    if (params?.lowOnly) sp.set("low_only", "true");
+    if (params?.q) sp.set("q", params.q);
+    sp.set("page_size", "100");
+    const data = await api.get<{ items: { product_id: number; stock: number }[] }>(
+      `/api/v1/inventory/stock?${sp.toString()}`,
+    );
+    return data.items.map((i) => ({ productId: i.product_id, stock: i.stock }));
   },
 
   async getDashboard(): Promise<DashboardSummary> {
-    return computeDashboard(getStoreState());
+    const data = await api.get<Record<string, unknown>>("/api/v1/dashboard/summary");
+    const items = (k: string) => (data[k] as Record<string, unknown>[]) || [];
+    return {
+      revenue: Number(data.revenue),
+      revenueChange: Number(data.revenue_change_percent),
+      orders: data.orders as number,
+      ordersChange: Number(data.orders_change_percent),
+      products: data.products as number,
+      lowStock: data.low_stock as number,
+      dailyRevenue: items("daily_revenue").map((d) => ({
+        date: d.date as string,
+        revenue: Number(d.revenue),
+        orders: d.orders as number,
+      })),
+      statusDistribution: items("status_distribution").map((s) => ({
+        status: s.status as OrderStatus,
+        count: s.count as number,
+      })),
+      recentOrders: items("recent_orders").map((o) => toOrder({
+        ...o,
+        items: [],
+        timeline: [],
+        subtotal: 0,
+        shipping_fee: 0,
+        discount: 0,
+        customer_name: o.customer_name,
+        phone: "",
+        email: "",
+        street: "",
+        district: "",
+        city: "",
+        note: "",
+        payment_method: "cod",
+        shipping_method: "standard",
+        created_at: o.created_at,
+      })),
+      bestSellers: [],
+    };
+  },
+
+  async validateCoupon(code: string, subtotal: number): Promise<{ ok: boolean; discount: number; error?: string }> {
+    const data = await api.post<{ ok: boolean; discount: string | number; error?: string }>(
+      "/api/v1/coupons/validate",
+      { code, subtotal },
+      { auth: false },
+    );
+    return { ok: data.ok, discount: Number(data.discount), error: data.error };
+  },
+
+  /* ------------------------------- Addresses -------------------------------- */
+
+  async getAddresses(): Promise<Address[]> {
+    const data = await api.get<Record<string, unknown>[]>("/api/v1/users/me/addresses");
+    return data.map((a) => ({
+      id: a.id as number,
+      label: a.label as string,
+      receiver: a.receiver as string,
+      phone: a.phone as string,
+      street: a.street as string,
+      district: a.district as string,
+      city: a.city as string,
+      isDefault: a.is_default as boolean,
+    }));
+  },
+
+  async saveAddress(a: Partial<Address> & { id?: number }): Promise<Address> {
+    const payload = {
+      label: a.label,
+      receiver: a.receiver,
+      phone: a.phone,
+      street: a.street,
+      district: a.district,
+      city: a.city,
+      is_default: a.isDefault,
+    };
+    if (a.id) {
+      const data = await api.patch<Record<string, unknown>>(
+        `/api/v1/users/me/addresses/${a.id}`,
+        payload,
+      );
+      return {
+        id: data.id as number,
+        label: data.label as string,
+        receiver: data.receiver as string,
+        phone: data.phone as string,
+        street: data.street as string,
+        district: data.district as string,
+        city: data.city as string,
+        isDefault: data.is_default as boolean,
+      };
+    }
+    const data = await api.post<Record<string, unknown>>("/api/v1/users/me/addresses", payload);
+    return {
+      id: data.id as number,
+      label: data.label as string,
+      receiver: data.receiver as string,
+      phone: data.phone as string,
+      street: data.street as string,
+      district: data.district as string,
+      city: data.city as string,
+      isDefault: data.is_default as boolean,
+    };
+  },
+
+  async deleteAddress(id: number): Promise<void> {
+    await api.delete(`/api/v1/users/me/addresses/${id}`);
   },
 };
 
-/* -------------------------------- Dashboard ---------------------------------- */
-
-export function computeDashboard(s: StoreStateType): DashboardSummary {
-  const revenue = s.orders
-    .filter((o) => o.status !== "cancelled")
-    .reduce((sum, o) => sum + o.total, 0);
-  const lowStock = s.products.filter((p) => p.stock <= 10).length;
-  const recentOrders = [...s.orders]
-    .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
-    .slice(0, 6);
-  const bestSellers = [...s.products].sort((a, b) => b.sold - a.sold).slice(0, 5);
-
-  const statuses: OrderStatus[] = ["pending", "confirmed", "shipping", "delivered", "cancelled"];
-  const statusDistribution = statuses.map((status) => ({
-    status,
-    count: s.orders.filter((o) => o.status === status).length,
-  }));
-
-  const prevRevenue = s.dailyRevenue.slice(0, 7).reduce((sum, d) => sum + d.revenue, 0);
-  const curRevenue = s.dailyRevenue.slice(7).reduce((sum, d) => sum + d.revenue, 0);
-
-  return {
-    revenue,
-    revenueChange: prevRevenue ? ((curRevenue - prevRevenue) / prevRevenue) * 100 : 0,
-    orders: s.orders.length,
-    ordersChange: 12.5,
-    products: s.products.length,
-    lowStock,
-    dailyRevenue: s.dailyRevenue,
-    statusDistribution,
-    recentOrders,
-    bestSellers,
-  };
-}
-
 /* ---------------------------------- Hook ------------------------------------- */
 
-/** Reactive admin state — re-renders on every store mutation. */
-export function useAdmin() {
-  const state = useStoreState();
-  return { state, actions: adminActions, dashboard: computeDashboard(state) };
-}
+/** Reactive admin data — refetch on demand. */
+export function useAdminData<T>(
+  fetcher: () => Promise<T>,
+  deps: unknown[] = [],
+): { data: T | null; loading: boolean; error: string | null; reload: () => void } {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
 
-/** Version counter — dùng để trigger fetch lại sau mutation. */
-export { useStoreVersion };
+  useEffect(() => {
+    let alive = true;
+    fetcher()
+      .then((d) => {
+        if (alive) {
+          setData(d);
+          setLoading(false);
+        }
+      })
+      .catch((e: Error) => {
+        if (alive) {
+          setError(e.message || "Tải dữ liệu thất bại.");
+          setLoading(false);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nonce, ...deps]);
 
-/** Đọc state hiện tại (hữu ích cho test/debug). Component nên dùng useAdmin(). */
-export function getAdminState(): StoreStateType {
-  return getStoreState();
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
+  return { data, loading, error, reload };
 }
