@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
                     _admin = _models2.User(
                         email=_admin_email,
                         password_hash=_hash_pw(_admin_password),
-                        full_name="Administrator",
+                        name="Administrator",
                         role="admin",
                         is_active=True,
                     )
