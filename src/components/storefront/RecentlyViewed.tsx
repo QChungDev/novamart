@@ -3,14 +3,12 @@
 import { useEffect, useState } from "react";
 import { getRecentViews } from "@/lib/recently-viewed";
 import { shopService } from "@/lib/services/shop";
-import { useStoreVersion } from "@/lib/data/store";
 import { ProductCard } from "./ProductCard";
 import { SectionHeader } from "./home-sections";
 import type { Product } from "@/lib/types";
 
-/** Recently viewed products rail (prototype, localStorage). */
-export function RecentlyViewed({ currentId }: { currentId?: string }) {
-  const version = useStoreVersion();
+/** Recently viewed products rail (localStorage). */
+export function RecentlyViewed({ currentId }: { currentId?: number }) {
   const [products, setProducts] = useState<Product[]>([]);
 
   useEffect(() => {
@@ -28,7 +26,7 @@ export function RecentlyViewed({ currentId }: { currentId?: string }) {
     return () => {
       alive = false;
     };
-  }, [currentId, version]);
+  }, [currentId]);
 
   if (products.length === 0) return null;
 

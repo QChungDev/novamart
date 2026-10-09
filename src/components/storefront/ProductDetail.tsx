@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Check, ShoppingCart, Zap } from "lucide-react";
 import { discountPercent, effectivePrice, shopService } from "@/lib/services/shop";
-import { useStoreQuery } from "@/lib/data/use-store-query";
+import { useStoreQuery } from "@/lib/data/use-api-query";
 import { formatVND, formatCompact } from "@/lib/format";
 import { pushRecentView } from "@/lib/recently-viewed";
 import { useCart } from "@/lib/store/cart-store";
@@ -45,7 +45,7 @@ export function ProductDetailClient({ product }: { product: Product }) {
       const [reviews, related, category] = await Promise.all([
         shopService.getReviews(product.id),
         shopService.getRelated(product, 4),
-        shopService.getCategoryById(product.categoryId),
+        product.categoryId ? shopService.getCategoryById(product.categoryId) : Promise.resolve(undefined),
       ]);
       return { reviews, related, category };
     },

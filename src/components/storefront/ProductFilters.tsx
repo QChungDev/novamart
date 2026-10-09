@@ -1,7 +1,7 @@
 "use client";
 
 import { shopService, type ProductSort } from "@/lib/services/shop";
-import { useStoreQuery } from "@/lib/data/use-store-query";
+import { useStoreQuery } from "@/lib/data/use-api-query";
 import { formatVND } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

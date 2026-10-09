@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Heart, Menu, Search, ShoppingCart, User, X } from "lucide-react";
 import { shopService } from "@/lib/services/shop";
-import { useStoreQuery } from "@/lib/data/use-store-query";
+import { useStoreQuery } from "@/lib/data/use-api-query";
 import { useCart } from "@/lib/store/cart-store";
 import { useAuth } from "@/lib/store/auth-store";
 import { cn } from "@/lib/utils";

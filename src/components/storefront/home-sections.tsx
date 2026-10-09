@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BadgePercent, Headset, RotateCcw, ShieldCheck, Truck } from "lucide-react";
 import { shopService } from "@/lib/services/shop";
-import { useStoreQuery } from "@/lib/data/use-store-query";
+import { useStoreQuery } from "@/lib/data/use-api-query";
 import { ProductCard } from "./ProductCard";
 import type { Category, Product } from "@/lib/types";
 

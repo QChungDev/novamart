@@ -120,7 +120,7 @@ export interface Column<T> {
   className?: string;
 }
 
-export function DataTable<T extends { id: string }>({
+export function DataTable<T extends { id: string | number }>({
   columns,
   data,
   emptyTitle = "Không có dữ liệu",

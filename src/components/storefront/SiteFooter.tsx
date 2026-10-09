@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Headset, Mail, MapPin, Phone } from "lucide-react";
 import { shopService } from "@/lib/services/shop";
-import { useStoreQuery } from "@/lib/data/use-store-query";
+import { useStoreQuery } from "@/lib/data/use-api-query";
 import type { Category } from "@/lib/types";
 
 const SOCIALS = ["Facebook", "Instagram", "Youtube"];
