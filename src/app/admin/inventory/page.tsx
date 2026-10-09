@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { ArrowDownToLine, History, PackagePlus, SlidersHorizontal } from "lucide-react";
-import { useAdmin } from "@/lib/services/admin";
+import { adminActions, useAdminData } from "@/lib/services/admin";
 import { useToast } from "@/lib/store/toast-store";
 import { formatVND, formatDateTime } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,11 @@ import type { Product, StockMovement } from "@/lib/types";
 type Tab = "stock" | "history";
 
 export default function AdminInventoryPage() {
-  const { state, actions } = useAdmin();
+  const { data: products, reload: reloadProducts } = useAdminData(() => adminActions.getProducts(), []);
+  const { data: movements, reload: reloadMovements } = useAdminData(() => adminActions.getMovements(), []);
+  const allProducts = products ?? [];
+  const allMovements = movements ?? [];
+  const reload = () => { reloadProducts(); reloadMovements(); };
   const { toast } = useToast();
   const [tab, setTab] = useState<Tab>("stock");
   const [receiveTarget, setReceiveTarget] = useState<Product | null>(null);
@@ -44,7 +48,8 @@ export default function AdminInventoryPage() {
       return;
     }
     if (receiveTarget) {
-      await actions.receiveStock(receiveTarget.id, n, reason.trim());
+      await adminActions.receiveStock(receiveTarget.id, n, reason.trim());
+      reload();
       toast(`Đã nhập ${n} sản phẩm "${receiveTarget.name}" vào kho.`);
     }
     setReceiveTarget(null);
@@ -62,7 +67,8 @@ export default function AdminInventoryPage() {
       return;
     }
     if (adjustTarget) {
-      await actions.adjustStock(adjustTarget.id, n, reason.trim());
+      await adminActions.adjustStock(adjustTarget.id, n, reason.trim());
+      reload();
       toast(`Đã điều chỉnh tồn kho "${adjustTarget.name}" thành ${n}.`);
     }
     setAdjustTarget(null);
@@ -132,7 +138,7 @@ export default function AdminInventoryPage() {
       header: "Sản phẩm",
       render: (m) => (
         <span className="font-semibold text-ink-900">
-          {state.products.find((p) => p.id === m.productId)?.name ?? m.productId}
+          {allProducts.find((p) => p.id === m.productId)?.name ?? m.productId}
         </span>
       ),
     },
@@ -171,17 +177,17 @@ export default function AdminInventoryPage() {
         value={tab}
         onChange={setTab}
         tabs={[
-          { value: "stock", label: "Tồn kho hiện tại", count: state.products.length },
-          { value: "history", label: "Lịch sử xuất nhập", count: state.movements.length },
+          { value: "stock", label: "Tồn kho hiện tại", count: allProducts.length },
+          { value: "history", label: "Lịch sử xuất nhập", count: allMovements.length },
         ]}
       />
 
       {tab === "stock" ? (
-        <DataTable columns={stockColumns} data={state.products} emptyTitle="Chưa có sản phẩm nào" />
+        <DataTable columns={stockColumns} data={allProducts} emptyTitle="Chưa có sản phẩm nào" />
       ) : (
         <DataTable
           columns={movementColumns}
-          data={state.movements}
+          data={allMovements}
           emptyTitle="Chưa có lịch sử xuất nhập"
           emptyDescription="Các lần nhập hàng và điều chỉnh tồn kho sẽ hiển thị ở đây."
         />

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useAdmin } from "@/lib/services/admin";
+import { adminActions, useAdminData } from "@/lib/services/admin";
 import { useToast } from "@/lib/store/toast-store";
 import { formatVND, formatDate } from "@/lib/format";
 import { Badge, couponTypeLabel } from "@/components/ui/badge";
@@ -25,7 +25,8 @@ const EMPTY = {
 };
 
 export default function AdminCouponsPage() {
-  const { state, actions } = useAdmin();
+  const { data: coupons, loading, reload } = useAdminData(() => adminActions.getCoupons(), []);
+  const allCoupons = coupons ?? [];
   const { toast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Coupon | null>(null);
@@ -61,7 +62,7 @@ export default function AdminCouponsPage() {
     const e: Record<string, string> = {};
     if (!/^[A-Z0-9]{4,20}$/.test(form.code.trim().toUpperCase()))
       e.code = "Mã gồm 4–20 ký tự chữ in hoa hoặc số.";
-    const dup = state.coupons.some(
+    const dup = allCoupons.some(
       (c) => c.code.toUpperCase() === form.code.trim().toUpperCase() && c.id !== editing?.id,
     );
     if (dup) e.code = "Mã này đã tồn tại.";
@@ -85,7 +86,7 @@ export default function AdminCouponsPage() {
   const save = async () => {
     if (!validate()) return;
     const payload: Coupon = {
-      id: editing?.id ?? `cp-${Date.now().toString(36)}`,
+      id: editing?.id ?? 0,
       code: form.code.trim().toUpperCase(),
       description: form.description.trim(),
       type: form.type,
@@ -97,7 +98,8 @@ export default function AdminCouponsPage() {
       endDate: new Date(form.endDate).toISOString(),
       status: form.status,
     };
-    await actions.saveCoupon(payload);
+    await adminActions.saveCoupon(payload);
+    reload();
     toast(editing ? "Cập nhật mã giảm giá thành công!" : "Thêm mã giảm giá thành công!");
     setModalOpen(false);
   };
@@ -176,14 +178,14 @@ export default function AdminCouponsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-ink-900">Khuyến mãi</h1>
-          <p className="mt-1 text-sm text-ink-500">{state.coupons.length} mã giảm giá</p>
+          <p className="mt-1 text-sm text-ink-500">{allCoupons.length} mã giảm giá</p>
         </div>
         <Button onClick={openAdd}>
           <Plus className="h-4 w-4" /> Tạo mã mới
         </Button>
       </div>
 
-      <DataTable columns={columns} data={state.coupons} emptyTitle="Chưa có mã giảm giá nào" />
+      {loading ? <p className="py-8 text-center text-sm text-ink-400">Đang tải...</p> : <DataTable columns={columns} data={allCoupons} emptyTitle="Chưa có mã giảm giá nào" />}
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "Sửa mã giảm giá" : "Tạo mã giảm giá"} wide>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -234,7 +236,8 @@ export default function AdminCouponsPage() {
         onClose={() => setDeleting(null)}
         onConfirm={async () => {
           if (deleting) {
-            await actions.deleteCoupon(deleting.id);
+            await adminActions.deleteCoupon(deleting.id);
+            reload();
             toast(`Đã xóa mã "${deleting.code}".`, "info");
             setDeleting(null);
           }

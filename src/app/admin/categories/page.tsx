@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { useAdmin } from "@/lib/services/admin";
+import { adminActions, useAdminData } from "@/lib/services/admin";
 import { useToast } from "@/lib/store/toast-store";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog, Modal } from "@/components/ui/overlay";
@@ -14,7 +14,10 @@ import type { Category } from "@/lib/types";
 const EMPTY = { name: "", slug: "", image: "", description: "" };
 
 export default function AdminCategoriesPage() {
-  const { state, actions } = useAdmin();
+  const { data: categories, loading, reload } = useAdminData(() => adminActions.getCategories(), []);
+  const { data: products } = useAdminData(() => adminActions.getProducts(), []);
+  const allCategories = categories ?? [];
+  const allProducts = products ?? [];
   const { toast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
@@ -43,7 +46,7 @@ export default function AdminCategoriesPage() {
       e.slug = "Slug chỉ gồm chữ thường, số và dấu gạch ngang.";
     if (form.image && !/^https?:\/\/.+/.test(form.image))
       e.image = "URL hình ảnh không hợp lệ.";
-    const dup = state.categories.some(
+    const dup = allCategories.some(
       (c) => c.slug === form.slug.trim() && c.id !== editing?.id,
     );
     if (dup) e.slug = "Slug này đã được sử dụng.";
@@ -54,18 +57,19 @@ export default function AdminCategoriesPage() {
   const save = async () => {
     if (!validate()) return;
     const payload: Category = {
-      id: editing?.id ?? `c-${Date.now().toString(36)}`,
+      id: editing?.id ?? 0,
       name: form.name.trim(),
       slug: form.slug.trim(),
       image: form.image.trim() || "https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&w=800&q=80",
       description: form.description.trim(),
     };
-    await actions.saveCategory(payload);
+    await adminActions.saveCategory(payload);
+    reload();
     toast(editing ? "Cập nhật danh mục thành công!" : "Thêm danh mục mới thành công!");
     setModalOpen(false);
   };
 
-  const productCount = (id: string) => state.products.filter((p) => p.categoryId === id).length;
+  const productCount = (id: number) => allProducts.filter((p) => p.categoryId === id).length;
 
   const columns: Column<Category>[] = [
     {
@@ -123,14 +127,14 @@ export default function AdminCategoriesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-ink-900">Danh mục</h1>
-          <p className="mt-1 text-sm text-ink-500">{state.categories.length} danh mục sản phẩm</p>
+          <p className="mt-1 text-sm text-ink-500">{allCategories.length} danh mục sản phẩm</p>
         </div>
         <Button onClick={openAdd}>
           <Plus className="h-4 w-4" /> Thêm danh mục
         </Button>
       </div>
 
-      <DataTable columns={columns} data={state.categories} />
+      {loading ? <p className="py-8 text-center text-sm text-ink-400">Đang tải...</p> : <DataTable columns={columns} data={allCategories} />}
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "Sửa danh mục" : "Thêm danh mục"}>
         <div className="space-y-4">
@@ -158,7 +162,8 @@ export default function AdminCategoriesPage() {
         onClose={() => setDeleting(null)}
         onConfirm={async () => {
           if (deleting) {
-            await actions.deleteCategory(deleting.id);
+            await adminActions.deleteCategory(deleting.id);
+            reload();
             toast(`Đã xóa danh mục "${deleting.name}".`, "info");
             setDeleting(null);
           }

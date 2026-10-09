@@ -7,9 +7,9 @@ import { useRouter } from "next/navigation";
 import { Banknote, CheckCircle2, CreditCard, ShoppingCart, Truck, Wallet, Zap } from "lucide-react";
 import { useCart } from "@/lib/store/cart-store";
 import { useAuth } from "@/lib/store/auth-store";
-import { adminActions } from "@/lib/services/admin";
+import { api } from "@/lib/api/client";
 import { validateCoupon, shippingFeeFor, type CouponCheck } from "@/lib/services/pricing";
-import { formatVND, generateOrderCode } from "@/lib/format";
+import { formatVND } from "@/lib/format";
 import { Breadcrumbs } from "@/components/ui/data";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
@@ -114,7 +114,7 @@ export default function CheckoutPage() {
     }
     const result = await validateCoupon(couponCode, subtotal);
     if (result.ok) {
-      setAppliedCode(result.coupon.code);
+      setAppliedCode(couponCode.trim().toUpperCase());
       setCouponError("");
     } else {
       setCouponError(result.error);
@@ -128,41 +128,59 @@ export default function CheckoutPage() {
       return;
     }
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 900)); // mock latency
-
-    const order: Order = {
-      id: `o-${Date.now().toString(36)}`,
-      code: generateOrderCode(),
-      customerId: user?.id,
-      customerName: form.name.trim(),
-      phone: form.phone.trim(),
-      email: form.email.trim(),
-      street: form.street.trim(),
-      district: form.district.trim(),
-      city: form.city,
-      note: form.note.trim() || undefined,
-      items: lines.map((l) => ({
-        productId: l.productId,
-        name: l.product.name,
-        image: l.product.images[0],
-        price: l.lineTotal / l.quantity,
-        quantity: l.quantity,
-      })),
-      subtotal,
-      shippingFee,
-      discount,
-      total,
-      couponCode: appliedCode ?? undefined,
-      status: "pending",
-      paymentMethod: form.paymentMethod,
-      shippingMethod: form.shippingMethod,
-      createdAt: new Date().toISOString(),
-      timeline: [{ status: "pending", at: new Date().toISOString(), note: "Khách hàng đặt đơn (demo)" }],
-    };
-    await adminActions.createOrder(order);
-    clear();
-    setSubmitting(false);
-    setPlacedOrder({ ...order });
+    try {
+      const data = await api.post<Record<string, unknown>>("/api/v1/orders/checkout", {
+        items: lines.map((l) => ({ product_id: l.productId, quantity: l.quantity })),
+        customer_name: form.name.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+        street: form.street.trim(),
+        district: form.district.trim(),
+        city: form.city,
+        note: form.note.trim(),
+        shipping_method: form.shippingMethod,
+        payment_method: form.paymentMethod,
+        coupon_code: appliedCode,
+      });
+      const order = {
+        id: data.id as number,
+        code: data.code as string,
+        customerName: data.customer_name as string,
+        phone: data.phone as string,
+        email: data.email as string,
+        street: data.street as string,
+        district: data.district as string,
+        city: data.city as string,
+        note: data.note as string,
+        items: (data.items as Record<string, unknown>[]).map((i) => ({
+          productId: i.product_id as number,
+          name: i.name as string,
+          image: i.image as string,
+          price: Number(i.price),
+          quantity: i.quantity as number,
+        })),
+        subtotal: Number(data.subtotal),
+        shippingFee: Number(data.shipping_fee),
+        discount: Number(data.discount),
+        total: Number(data.total),
+        couponCode: (data.coupon_code as string) || undefined,
+        status: data.status as Order["status"],
+        paymentMethod: data.payment_method as Order["paymentMethod"],
+        shippingMethod: data.shipping_method as Order["shippingMethod"],
+        createdAt: data.created_at as string,
+        timeline: (data.timeline as Record<string, unknown>[]).map((t) => ({
+          status: t.status as Order["status"],
+          at: t.created_at as string,
+          note: t.note as string | undefined,
+        })),
+      } as Order;
+      clear();
+      setPlacedOrder(order);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Đặt hàng thất bại. Vui lòng thử lại.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   /* ------------------------- Order confirmation ------------------------- */
@@ -437,7 +455,7 @@ export default function CheckoutPage() {
             <div className="mt-4 border-t border-slate-100 pt-4">
               {appliedCode && couponCheck?.ok ? (
                 <p className="flex items-center justify-between text-sm">
-                  <span className="font-bold text-emerald-700">Mã {couponCheck.coupon.code}</span>
+                  <span className="font-bold text-emerald-700">Mã {appliedCode}</span>
                   <button
                     type="button"
                     onClick={() => {

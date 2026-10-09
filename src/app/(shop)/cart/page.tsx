@@ -7,7 +7,6 @@ import { ArrowLeft, ArrowRight, ShoppingCart, Tag, Trash2, X } from "lucide-reac
 import { useCart } from "@/lib/store/cart-store";
 import { useToast } from "@/lib/store/toast-store";
 import { validateCoupon, shippingFeeFor, type CouponCheck } from "@/lib/services/pricing";
-import { adminActions } from "@/lib/services/admin";
 import { formatVND } from "@/lib/format";
 import { Breadcrumbs, QuantitySelector } from "@/components/ui/data";
 import { Button } from "@/components/ui/button";
@@ -21,17 +20,7 @@ export default function CartPage() {
   const [couponError, setCouponError] = useState("");
   const [check, setCheck] = useState<CouponCheck | null>(null);
   const [shippingFee, setShippingFee] = useState(0);
-  const [freeShipThreshold, setFreeShipThreshold] = useState(500000);
-
-  useEffect(() => {
-    let alive = true;
-    adminActions.getSettings().then((s) => {
-      if (alive) setFreeShipThreshold(s.freeShippingThreshold);
-    });
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const freeShipThreshold = 500000;
 
   useEffect(() => {
     let alive = true;
@@ -56,9 +45,9 @@ export default function CartPage() {
     }
     const result = await validateCoupon(couponCode, subtotal);
     if (result.ok) {
-      setAppliedCode(result.coupon.code);
+      setAppliedCode(couponCode.trim().toUpperCase());
       setCouponError("");
-      toast(`Áp dụng mã ${result.coupon.code} thành công!`);
+      toast(`Áp dụng mã ${couponCode.trim().toUpperCase()} thành công!`);
     } else {
       setCouponError(result.error);
     }
@@ -164,7 +153,7 @@ export default function CartPage() {
               {appliedCode && check?.ok ? (
                 <div className="mt-2 flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2.5">
                   <span className="flex items-center gap-2 text-sm font-bold text-emerald-700">
-                    <Tag className="h-4 w-4" /> {check.coupon.code}
+                    <Tag className="h-4 w-4" /> {appliedCode}
                   </span>
                   <button
                     onClick={() => {

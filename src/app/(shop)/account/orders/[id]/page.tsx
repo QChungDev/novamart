@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Suspense, use } from "react";
 import { ArrowLeft, Check } from "lucide-react";
 import { useAuth } from "@/lib/store/auth-store";
-import { useAdmin } from "@/lib/services/admin";
+import { adminActions, useAdminData } from "@/lib/services/admin";
 import { formatVND, formatDateTime } from "@/lib/format";
 import { Breadcrumbs } from "@/components/ui/data";
 import { EmptyState, Spinner } from "@/components/ui/feedback";
@@ -22,8 +22,8 @@ function CustomerOrderDetailContent({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { user, loading } = useAuth();
-  const { state } = useAdmin();
+  const { loading } = useAuth();
+  const { data: order } = useAdminData(() => adminActions.getOrderByCode(id), [id]);
 
   if (loading) {
     return (
@@ -32,10 +32,6 @@ function CustomerOrderDetailContent({
       </div>
     );
   }
-
-  const order = state.orders.find(
-    (o) => o.id === id && user && o.email.toLowerCase() === user.email.toLowerCase(),
-  );
 
   if (!order) {
     return (

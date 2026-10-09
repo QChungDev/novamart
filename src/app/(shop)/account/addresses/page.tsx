@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { MapPin, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { useToast } from "@/lib/store/toast-store";
+import { adminActions, useAdminData } from "@/lib/services/admin";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog, Modal } from "@/components/ui/overlay";
-import { EmptyState } from "@/components/ui/feedback";
+import { EmptyState, Spinner } from "@/components/ui/feedback";
 import { FormField, Input, Select } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import type { Address } from "@/lib/types";
-
-const STORAGE_KEY = "novamart-addresses-v1";
 
 const CITIES = ["TP. Hồ Chí Minh", "Hà Nội", "Đà Nẵng", "Cần Thơ", "Hải Phòng", "Huế", "Khác"];
 
@@ -23,38 +22,16 @@ const EMPTY_FORM = {
   city: CITIES[0],
 };
 
-function readStored(): Address[] {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Address[]) : [];
-  } catch {
-    return [];
-  }
-}
-
 export default function AddressesPage() {
   const { toast } = useToast();
-  const [addresses, setAddresses] = useState<Address[]>([]);
+  const { data, loading, reload } = useAdminData(() => adminActions.getAddresses(), []);
+  const addresses = data ?? [];
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Address | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [deleting, setDeleting] = useState<Address | null>(null);
-
-  useEffect(() => {
-    // Client-only read; list renders empty until loaded.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAddresses(readStored());
-  }, []);
-
-  const persist = (list: Address[]) => {
-    setAddresses(list);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-    } catch {
-      /* ignore */
-    }
-  };
+  const [saving, setSaving] = useState(false);
 
   const openAdd = () => {
     setEditing(null);
@@ -88,35 +65,48 @@ export default function AddressesPage() {
     return Object.keys(e).length === 0;
   };
 
-  const save = () => {
+  const save = async () => {
     if (!validate()) return;
-    if (editing) {
-      persist(addresses.map((a) => (a.id === editing.id ? { ...a, ...form } : a)));
-      toast("Cập nhật địa chỉ thành công!");
-    } else {
-      const entry: Address = {
-        id: `addr-${Date.now()}`,
-        ...form,
-        isDefault: addresses.length === 0,
-      };
-      persist([...addresses, entry]);
-      toast("Thêm địa chỉ mới thành công!");
+    setSaving(true);
+    try {
+      if (editing) {
+        await adminActions.saveAddress({ ...editing, ...form });
+        toast("Cập nhật địa chỉ thành công!");
+      } else {
+        await adminActions.saveAddress({ ...form, isDefault: addresses.length === 0 });
+        toast("Thêm địa chỉ mới thành công!");
+      }
+      setModalOpen(false);
+      reload();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Lưu địa chỉ thất bại.", "error");
+    } finally {
+      setSaving(false);
     }
-    setModalOpen(false);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!deleting) return;
-    const rest = addresses.filter((a) => a.id !== deleting.id);
-    if (deleting.isDefault && rest.length > 0) rest[0].isDefault = true;
-    persist(rest);
-    setDeleting(null);
-    toast("Đã xóa địa chỉ.", "info");
+    try {
+      await adminActions.deleteAddress(deleting.id);
+      setDeleting(null);
+      toast("Đã xóa địa chỉ.", "info");
+      reload();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Xóa địa chỉ thất bại.", "error");
+    }
   };
 
-  const setDefault = (id: string) => {
-    persist(addresses.map((a) => ({ ...a, isDefault: a.id === id })));
-    toast("Đã đặt làm địa chỉ mặc định.");
+  const setDefault = async (id: number) => {
+    const target = addresses.find((a) => a.id === id);
+    if (!target) return;
+    try {
+      await adminActions.saveAddress({ ...target, isDefault: true });
+      toast("Đã đặt làm địa chỉ mặc định.");
+      reload();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Thao tác thất bại.", "error");
+    }
   };
 
   return (
@@ -131,7 +121,11 @@ export default function AddressesPage() {
         </Button>
       </div>
 
-      {addresses.length === 0 ? (
+      {loading ? (
+        <div className="mt-6 flex justify-center py-12">
+          <Spinner />
+        </div>
+      ) : addresses.length === 0 ? (
         <div className="mt-6">
           <EmptyState
             title="Chưa có địa chỉ nào"
@@ -224,7 +218,7 @@ export default function AddressesPage() {
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Hủy</Button>
-            <Button onClick={save}>{editing ? "Lưu thay đổi" : "Thêm địa chỉ"}</Button>
+            <Button onClick={save} disabled={saving}>{saving ? "Đang lưu..." : editing ? "Lưu thay đổi" : "Thêm địa chỉ"}</Button>
           </div>
         </div>
       </Modal>

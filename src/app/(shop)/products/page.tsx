@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { SlidersHorizontal } from "lucide-react";
 import { shopService } from "@/lib/services/shop";
-import { useStoreQuery } from "@/lib/data/use-store-query";
+import { useStoreQuery } from "@/lib/data/use-api-query";
 import { Breadcrumbs, Pagination } from "@/components/ui/data";
 import { EmptyState, Spinner } from "@/components/ui/feedback";
 import { ProductCard } from "@/components/storefront/ProductCard";

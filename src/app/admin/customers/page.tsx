@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Ban, CheckCircle2, Search } from "lucide-react";
-import { useAdmin } from "@/lib/services/admin";
+import { adminActions, useAdminData } from "@/lib/services/admin";
 import { useToast } from "@/lib/store/toast-store";
 import { formatVND, formatDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
@@ -14,22 +14,15 @@ import type { Customer } from "@/lib/types";
 const PAGE_SIZE = 10;
 
 export default function AdminCustomersPage() {
-  const { state, actions } = useAdmin();
   const { toast } = useToast();
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
+  const { data, reload } = useAdminData(() => adminActions.getCustomers({ q }), [q]);
+  const allCustomers = data?.items ?? [];
   const [target, setTarget] = useState<Customer | null>(null);
 
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return state.customers;
-    return state.customers.filter((c) =>
-      `${c.name} ${c.email} ${c.phone}`.toLowerCase().includes(needle),
-    );
-  }, [state.customers, q]);
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const totalPages = Math.ceil(allCustomers.length / PAGE_SIZE);
+  const pageItems = allCustomers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const columns: Column<Customer>[] = [
     {
@@ -96,7 +89,7 @@ export default function AdminCustomersPage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-extrabold text-ink-900">Khách hàng</h1>
-        <p className="mt-1 text-sm text-ink-500">{state.customers.length} khách hàng · dữ liệu demo</p>
+        <p className="mt-1 text-sm text-ink-500">{data?.total ?? 0} khách hàng</p>
       </div>
 
       <div className="relative">
@@ -112,7 +105,7 @@ export default function AdminCustomersPage() {
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {pageItems.length === 0 ? (
         <EmptyState title="Không tìm thấy khách hàng" description="Thử thay đổi từ khóa tìm kiếm." />
       ) : (
         <>
@@ -127,7 +120,8 @@ export default function AdminCustomersPage() {
         onConfirm={async () => {
           if (target) {
             const next = target.status === "active" ? "blocked" : "active";
-            await actions.setCustomerStatus(target.id, next);
+            await adminActions.setCustomerStatus(target.id, next);
+            reload();
             toast(
               next === "blocked"
                 ? `Đã khóa tài khoản "${target.name}".`

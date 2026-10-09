@@ -3,18 +3,18 @@
 import Link from "next/link";
 import { ArrowRight, MapPin, Package, Wallet } from "lucide-react";
 import { useAuth } from "@/lib/store/auth-store";
-import { useAdmin } from "@/lib/services/admin";
+import { adminActions, useAdminData } from "@/lib/services/admin";
 import { formatVND, formatDate } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/feedback";
+import type { Order } from "@/lib/types";
 
 export default function AccountOverviewPage() {
   const { user } = useAuth();
-  const { state } = useAdmin();
+  const { data } = useAdminData(() => adminActions.getOrders({ pageSize: 100 }), [user?.id]);
+  const orders: Order[] = data?.items ?? [];
 
-  const myOrders = state.orders.filter(
-    (o) => user && o.email.toLowerCase() === user.email.toLowerCase(),
-  );
+  const myOrders = orders;
   const totalSpent = myOrders
     .filter((o) => o.status !== "cancelled")
     .reduce((s, o) => s + o.total, 0);

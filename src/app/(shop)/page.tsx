@@ -1,7 +1,7 @@
 "use client";
 
 import { shopService } from "@/lib/services/shop";
-import { useStoreQuery } from "@/lib/data/use-store-query";
+import { useStoreQuery } from "@/lib/data/use-api-query";
 import type { Product } from "@/lib/types";
 import {
   BenefitsBar,

@@ -4,23 +4,20 @@ import Link from "next/link";
 import { useState } from "react";
 import { Package } from "lucide-react";
 import { useAuth } from "@/lib/store/auth-store";
-import { useAdmin } from "@/lib/services/admin";
+import { adminActions, useAdminData } from "@/lib/services/admin";
 import { formatVND, formatDate } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/feedback";
 import { Tabs } from "@/components/ui/data";
-import type { OrderStatus } from "@/lib/types";
+import type { Order, OrderStatus } from "@/lib/types";
 
 type Tab = "all" | OrderStatus;
 
 export default function AccountOrdersPage() {
   const { user } = useAuth();
-  const { state } = useAdmin();
   const [tab, setTab] = useState<Tab>("all");
-
-  const myOrders = state.orders.filter(
-    (o) => user && o.email.toLowerCase() === user.email.toLowerCase(),
-  );
+  const { data } = useAdminData(() => adminActions.getOrders({ pageSize: 100 }), [user?.id]);
+  const myOrders: Order[] = data?.items ?? [];
   const filtered = tab === "all" ? myOrders : myOrders.filter((o) => o.status === tab);
 
   const countFor = (t: Tab) =>
@@ -58,7 +55,7 @@ export default function AccountOrdersPage() {
             {filtered.map((o) => (
               <Link
                 key={o.id}
-                href={`/account/orders/${o.id}`}
+                href={`/account/orders/${o.code}`}
                 className="block rounded-2xl border border-slate-100 bg-white p-4 transition-shadow hover:shadow-md md:p-5"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">

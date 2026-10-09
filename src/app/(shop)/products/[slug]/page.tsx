@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { shopService } from "@/lib/services/shop";
-import { useStoreQuery } from "@/lib/data/use-store-query";
+import { useStoreQuery } from "@/lib/data/use-api-query";
 import { ProductDetailClient } from "@/components/storefront/ProductDetail";
 import { Spinner } from "@/components/ui/feedback";
 import type { Product } from "@/lib/types";
