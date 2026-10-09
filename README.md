@@ -107,3 +107,12 @@ Kiến trúc đã tách tầng service để dễ thay thế:
 | Frontend deploy | Vercel |
 
 Thay tầng mock bằng cách: giữ nguyên chữ ký hàm trong `lib/services/*`, đổi phần thân thành `fetch()` tới API. Components không cần sửa.
+
+## Kiến trúc dữ liệu (cập nhật)
+
+- **Unified store** (`src/lib/data/store.ts`): 1 state duy nhất cho shop + admin,
+  lưu `localStorage`, tự đồng bộ khi có thay đổi.
+- **Service async**: `shopService`, `adminActions`, `pricing` đều trả về `Promise`
+  — Phase 2 chỉ cần đổi ruột thành `fetch()` FastAPI.
+- **useStoreQuery** (`src/lib/data/use-store-query.ts`): hook fetch lại dữ liệu
+  mỗi khi store thay đổi.
