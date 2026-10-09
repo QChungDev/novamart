@@ -194,9 +194,9 @@ export default function AdminProductsPage() {
       <ConfirmDialog
         open={!!deleting}
         onClose={() => setDeleting(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (deleting) {
-            actions.deleteProduct(deleting.id);
+            await actions.deleteProduct(deleting.id);
             toast(`Đã xóa sản phẩm "${deleting.name}".`, "info");
             setDeleting(null);
           }

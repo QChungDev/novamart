@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Check, ShoppingCart, Zap } from "lucide-react";
 import { discountPercent, effectivePrice, shopService } from "@/lib/services/shop";
+import { useStoreQuery } from "@/lib/data/use-store-query";
 import { formatVND, formatCompact } from "@/lib/format";
 import { pushRecentView } from "@/lib/recently-viewed";
 import { useCart } from "@/lib/store/cart-store";
@@ -16,7 +17,13 @@ import { EmptyState, Rating } from "@/components/ui/feedback";
 import { ProductCard } from "@/components/storefront/ProductCard";
 import { RecentlyViewed } from "@/components/storefront/RecentlyViewed";
 import { cn } from "@/lib/utils";
-import type { Product } from "@/lib/types";
+import type { Category, Product, Review } from "@/lib/types";
+
+interface DetailExtras {
+  reviews: Review[];
+  related: Product[];
+  category?: Category;
+}
 
 export function ProductDetailClient({ product }: { product: Product }) {
   const router = useRouter();
@@ -32,9 +39,20 @@ export function ProductDetailClient({ product }: { product: Product }) {
 
   const price = effectivePrice(product);
   const discount = discountPercent(product);
-  const reviews = shopService.getReviews(product.id);
-  const related = shopService.getRelated(product, 4);
-  const category = shopService.getCategoryById(product.categoryId);
+  const extras = useStoreQuery<DetailExtras>(
+    "detail-extras-" + product.id,
+    async () => {
+      const [reviews, related, category] = await Promise.all([
+        shopService.getReviews(product.id),
+        shopService.getRelated(product, 4),
+        shopService.getCategoryById(product.categoryId),
+      ]);
+      return { reviews, related, category };
+    },
+  );
+  const reviews = extras?.reviews ?? [];
+  const related = extras?.related ?? [];
+  const category = extras?.category;
 
   const handleAdd = () => {
     addItem(product.id, quantity);

@@ -1,10 +1,12 @@
 /**
- * Shop service (Phase 1 prototype).
- * Pure functions over typed mock data. In Phase 2 these will call the
- * FastAPI backend — the signatures are designed to stay the same.
+ * Shop service — async data access for the storefront.
+ *
+ * Điểm 2 (review): mọi hàm đều async (Promise) để chuẩn bị cho Phase 2,
+ * khi ruột các hàm này đổi thành fetch() tới FastAPI mà call sites giữ nguyên.
+ * Phase 1 đọc từ unified store (đồng bộ với những gì Admin sửa).
  */
 
-import { categories, products, reviews } from "../mock-data";
+import { getStoreState } from "../data/store";
 import type { Category, Product, Review } from "../types";
 
 export type ProductSort =
@@ -43,20 +45,26 @@ function normalize(s: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function activeProducts(): Product[] {
+  return getStoreState().products.filter((p) => p.status === "active");
+}
+
 export const shopService = {
-  getCategories(): Category[] {
-    return categories;
+  async getCategories(): Promise<Category[]> {
+    return getStoreState().categories;
   },
 
-  getCategoryBySlug(slug: string): Category | undefined {
-    return categories.find((c) => c.slug === slug);
+  async getCategoryBySlug(slug: string): Promise<Category | undefined> {
+    return getStoreState().categories.find((c) => c.slug === slug);
   },
 
-  getCategoryById(id: string): Category | undefined {
-    return categories.find((c) => c.id === id);
+  async getCategoryById(id: string): Promise<Category | undefined> {
+    return getStoreState().categories.find((c) => c.id === id);
   },
 
-  getProducts(filter: ProductFilter = {}): { items: Product[]; total: number } {
+  async getProducts(
+    filter: ProductFilter = {},
+  ): Promise<{ items: Product[]; total: number }> {
     const {
       q,
       categorySlug,
@@ -69,10 +77,11 @@ export const shopService = {
       pageSize = 12,
     } = filter;
 
-    let items = products.filter((p) => p.status === "active");
+    const s = getStoreState();
+    let items = s.products.filter((p) => p.status === "active");
 
     if (categorySlug) {
-      const cat = categories.find((c) => c.slug === categorySlug);
+      const cat = s.categories.find((c) => c.slug === categorySlug);
       if (cat) items = items.filter((p) => p.categoryId === cat.id);
     }
     if (q?.trim()) {
@@ -113,17 +122,17 @@ export const shopService = {
     return { items: sorted.slice(start, start + pageSize), total };
   },
 
-  getProductBySlug(slug: string): Product | undefined {
-    return products.find((p) => p.slug === slug && p.status === "active");
+  async getProductBySlug(slug: string): Promise<Product | undefined> {
+    return getStoreState().products.find((p) => p.slug === slug && p.status === "active");
   },
 
-  getProductById(id: string): Product | undefined {
-    return products.find((p) => p.id === id);
+  async getProductById(id: string): Promise<Product | undefined> {
+    return getStoreState().products.find((p) => p.id === id);
   },
 
-  getRelated(product: Product, limit = 4): Product[] {
-    return products
-      .filter(
+  async getRelated(product: Product, limit = 4): Promise<Product[]> {
+    return getStoreState()
+      .products.filter(
         (p) =>
           p.id !== product.id &&
           p.status === "active" &&
@@ -133,31 +142,33 @@ export const shopService = {
       .slice(0, limit);
   },
 
-  getFeatured(limit = 8): Product[] {
-    return products.filter((p) => p.isFeatured && p.status === "active").slice(0, limit);
+  async getFeatured(limit = 8): Promise<Product[]> {
+    return getStoreState()
+      .products.filter((p) => p.isFeatured && p.status === "active")
+      .slice(0, limit);
   },
 
-  getBestSellers(limit = 8): Product[] {
-    return [...products]
+  async getBestSellers(limit = 8): Promise<Product[]> {
+    return [...getStoreState().products]
       .filter((p) => p.status === "active")
       .sort((a, b) => b.sold - a.sold)
       .slice(0, limit);
   },
 
-  getNewArrivals(limit = 8): Product[] {
-    return [...products]
+  async getNewArrivals(limit = 8): Promise<Product[]> {
+    return [...getStoreState().products]
       .filter((p) => p.status === "active")
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
       .slice(0, limit);
   },
 
-  getReviews(productId: string): Review[] {
-    return reviews.filter((r) => r.productId === productId);
+  async getReviews(productId: string): Promise<Review[]> {
+    return getStoreState().reviews.filter((r) => r.productId === productId);
   },
 
   /** Max price across catalog, used to bound the price filter UI. */
-  getPriceBounds(): { min: number; max: number } {
-    const prices = products.map(effectivePrice);
+  async getPriceBounds(): Promise<{ min: number; max: number }> {
+    const prices = activeProducts().map(effectivePrice);
     return { min: Math.min(...prices), max: Math.max(...prices) };
   },
 };

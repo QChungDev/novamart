@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Heart, Menu, Search, ShoppingCart, User, X } from "lucide-react";
 import { shopService } from "@/lib/services/shop";
+import { useStoreQuery } from "@/lib/data/use-store-query";
 import { useCart } from "@/lib/store/cart-store";
 import { useAuth } from "@/lib/store/auth-store";
 import { cn } from "@/lib/utils";
+import type { Category } from "@/lib/types";
 
 export function SiteHeader() {
   const router = useRouter();
@@ -15,7 +17,10 @@ export function SiteHeader() {
   const { user } = useAuth();
   const [q, setQ] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
-  const categories = shopService.getCategories();
+  const data = useStoreQuery<Category[]>("header-categories", () =>
+    shopService.getCategories(),
+  );
+  const categories = data ?? [];
 
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault();

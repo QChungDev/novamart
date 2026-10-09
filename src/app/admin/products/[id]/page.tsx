@@ -39,8 +39,8 @@ function EditProductContent({ params }: { params: Promise<{ id: string }> }) {
 
   const handleSubmit = (v: ProductFormValue) => {
     setSubmitting(true);
-    setTimeout(() => {
-      actions.saveProduct({
+    setTimeout(async () => {
+      await actions.saveProduct({
         ...product,
         name: v.name.trim(),
         sku: v.sku.trim(),

@@ -1,9 +1,12 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BadgePercent, Headset, RotateCcw, ShieldCheck, Truck } from "lucide-react";
 import { shopService } from "@/lib/services/shop";
+import { useStoreQuery } from "@/lib/data/use-store-query";
 import { ProductCard } from "./ProductCard";
-import type { Product } from "@/lib/types";
+import type { Category, Product } from "@/lib/types";
 
 /* ----------------------------------- Hero ----------------------------------- */
 
@@ -56,12 +59,14 @@ export function Hero() {
 /* ------------------------------- Category grid ------------------------------- */
 
 export function CategoryGrid() {
-  const categories = shopService.getCategories();
+  const categories = useStoreQuery<Category[]>("categories", () =>
+    shopService.getCategories(),
+  );
   return (
     <section>
       <SectionHeader title="Danh mục nổi bật" href="/products" />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-        {categories.map((c) => (
+        {(categories ?? []).map((c) => (
           <Link
             key={c.id}
             href={`/products?category=${c.slug}`}

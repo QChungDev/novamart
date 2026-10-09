@@ -1,11 +1,18 @@
+"use client";
+
 import Link from "next/link";
 import { Headset, Mail, MapPin, Phone } from "lucide-react";
 import { shopService } from "@/lib/services/shop";
+import { useStoreQuery } from "@/lib/data/use-store-query";
+import type { Category } from "@/lib/types";
 
 const SOCIALS = ["Facebook", "Instagram", "Youtube"];
 
 export function SiteFooter() {
-  const categories = shopService.getCategories().slice(0, 6);
+  const data = useStoreQuery<Category[]>("footer-categories", () =>
+    shopService.getCategories(),
+  );
+  const categories = (data ?? []).slice(0, 6);
   return (
     <footer className="mt-16 bg-ink-950 text-slate-300">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 md:grid-cols-2 lg:grid-cols-4">

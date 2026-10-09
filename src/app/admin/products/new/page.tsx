@@ -42,8 +42,8 @@ export default function NewProductPage() {
 
   const handleSubmit = (v: ProductFormValue) => {
     setSubmitting(true);
-    setTimeout(() => {
-      actions.saveProduct(toProduct(v));
+    setTimeout(async () => {
+      await actions.saveProduct(toProduct(v));
       toast("Thêm sản phẩm mới thành công!");
       router.push("/admin/products");
     }, 500);

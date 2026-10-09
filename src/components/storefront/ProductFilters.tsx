@@ -1,11 +1,13 @@
 "use client";
 
 import { shopService, type ProductSort } from "@/lib/services/shop";
+import { useStoreQuery } from "@/lib/data/use-store-query";
 import { formatVND } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/input";
 import { X } from "lucide-react";
+import type { Category } from "@/lib/types";
 
 export interface FilterState {
   categorySlug: string;
@@ -74,7 +76,10 @@ export function ActiveFilters({
   onClear: () => void;
 }) {
   const chips: { key: keyof FilterState; label: string }[] = [];
-  const categories = shopService.getCategories();
+  const data = useStoreQuery<Category[]>("filter-categories", () =>
+    shopService.getCategories(),
+  );
+  const categories = data ?? [];
   if (filters.categorySlug) {
     const c = categories.find((x) => x.slug === filters.categorySlug);
     if (c) chips.push({ key: "categorySlug", label: c.name });
@@ -116,7 +121,10 @@ export function FilterSidebar({
   filters: FilterState;
   onChange: (f: FilterState) => void;
 }) {
-  const categories = shopService.getCategories();
+  const data = useStoreQuery<Category[]>("filter-categories", () =>
+    shopService.getCategories(),
+  );
+  const categories = data ?? [];
   const set = (patch: Partial<FilterState>) => onChange({ ...filters, ...patch });
 
   const togglePrice = (min: number, max: number | undefined) => {

@@ -3,25 +3,32 @@
 import { useEffect, useState } from "react";
 import { getRecentViews } from "@/lib/recently-viewed";
 import { shopService } from "@/lib/services/shop";
+import { useStoreVersion } from "@/lib/data/store";
 import { ProductCard } from "./ProductCard";
 import { SectionHeader } from "./home-sections";
 import type { Product } from "@/lib/types";
 
 /** Recently viewed products rail (prototype, localStorage). */
 export function RecentlyViewed({ currentId }: { currentId?: string }) {
+  const version = useStoreVersion();
   const [products, setProducts] = useState<Product[]>([]);
 
   useEffect(() => {
+    let alive = true;
     // Client-only read; component renders null until loaded.
-    const ids = getRecentViews(currentId).slice(0, 4);
-    const found: Product[] = [];
-    for (const id of ids) {
-      const p = shopService.getProductById(id);
-      if (p) found.push(p);
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setProducts(found);
-  }, [currentId]);
+    (async () => {
+      const ids = getRecentViews(currentId).slice(0, 4);
+      const found: Product[] = [];
+      for (const id of ids) {
+        const p = await shopService.getProductById(id);
+        if (p) found.push(p);
+      }
+      if (alive) setProducts(found);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [currentId, version]);
 
   if (products.length === 0) return null;
 

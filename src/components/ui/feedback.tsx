@@ -41,6 +41,27 @@ export function Skeleton({ className }: { className?: string }) {
   return <div className={cn("animate-pulse rounded-xl bg-slate-100", className)} />;
 }
 
+/** Skeleton cho hàng sản phẩm trang chủ khi đang tải dữ liệu. */
+export function ProductRowSkeleton({ count = 4 }: { count?: number }) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="h-4 w-72" />
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {Array.from({ length: count }).map((_, i) => (
+          <div key={i} className="space-y-3">
+            <Skeleton className="aspect-square w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Rating({
   value,
   size = "sm",

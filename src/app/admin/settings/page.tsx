@@ -51,8 +51,8 @@ export default function AdminSettingsPage() {
     if (Object.keys(errs).length > 0) return;
 
     setSaving(true);
-    setTimeout(() => {
-      actions.updateSettings({
+    setTimeout(async () => {
+      await actions.updateSettings({
         storeName: form.storeName.trim(),
         hotline: form.hotline.trim(),
         email: form.email.trim(),
@@ -128,8 +128,8 @@ export default function AdminSettingsPage() {
       <ConfirmDialog
         open={resetOpen}
         onClose={() => setResetOpen(false)}
-        onConfirm={() => {
-          actions.resetDemo();
+        onConfirm={async () => {
+          await actions.resetDemo();
           setResetOpen(false);
           toast("Đã khôi phục toàn bộ dữ liệu demo ban đầu.", "info");
         }}

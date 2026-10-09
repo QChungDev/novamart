@@ -1,22 +1,17 @@
 "use client";
 
 /**
- * Admin prototype store (Phase 1).
- * In-memory state seeded from mock data and persisted to localStorage.
- * In Phase 2 every action here becomes a FastAPI call.
+ * Admin service — async mutations/queries over the unified store.
+ *
+ * Điểm 1 (review): dùng chung store với shop (src/lib/data/store.ts) nên
+ * mọi thay đổi ở Admin hiện ngay ra cửa hàng.
+ * Điểm 2 (review): mọi thao tác đều async (Promise) — Phase 2 đổi ruột
+ * thành fetch() FastAPI mà không sửa call sites.
+ * Điểm 3 (review): auth hiện tại chỉ là mô phỏng phía client; Phase 2 sẽ
+ * xác thực + phân quyền ở backend trên từng API.
  */
 
-import { useSyncExternalStore } from "react";
-import {
-  categories as seedCategories,
-  coupons as seedCoupons,
-  customers as seedCustomers,
-  dailyRevenue as seedDailyRevenue,
-  defaultSettings,
-  orders as seedOrders,
-  products as seedProducts,
-  stockMovements as seedMovements,
-} from "../mock-data";
+import { getStoreState, mutate, resetStore, uid, useStoreState, useStoreVersion } from "../data/store";
 import type {
   Category,
   Coupon,
@@ -28,135 +23,55 @@ import type {
   StockMovement,
   StoreSettings,
 } from "../types";
-
-export interface AdminState {
-  products: Product[];
-  categories: Category[];
-  orders: Order[];
-  coupons: Coupon[];
-  customers: Customer[];
-  movements: StockMovement[];
-  settings: StoreSettings;
-}
-
-const STORAGE_KEY = "novamart-admin-v1";
-
-function uid(prefix: string): string {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function deepCopy<T>(v: T): T {
-  return JSON.parse(JSON.stringify(v)) as T;
-}
-
-function seed(): AdminState {
-  return {
-    products: deepCopy(seedProducts),
-    categories: deepCopy(seedCategories),
-    orders: deepCopy(seedOrders),
-    coupons: deepCopy(seedCoupons),
-    customers: deepCopy(seedCustomers),
-    movements: deepCopy(seedMovements),
-    settings: deepCopy(defaultSettings),
-  };
-}
-
-let state: AdminState | null = null;
-const listeners = new Set<() => void>();
-
-function load(): AdminState {
-  if (typeof window === "undefined") return seed();
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as AdminState;
-      if (parsed.products && parsed.orders) return parsed;
-    }
-  } catch {
-    /* ignore */
-  }
-  return seed();
-}
-
-function getState(): AdminState {
-  if (!state) state = load();
-  return state;
-}
-
-function emit() {
-  for (const l of listeners) l();
-}
-
-function setState(patch: Partial<AdminState>) {
-  state = { ...getState(), ...patch };
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    /* ignore */
-  }
-  emit();
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-function getSnapshot(): AdminState {
-  return getState();
-}
-
-// Đọc state hiện tại (hữu ích cho test/debug). Component nên dùng useAdmin().
-export function getAdminState(): AdminState {
-  return getSnapshot();
-}
+import type { StoreState as StoreStateType } from "../data/store";
 
 /* --------------------------------- Actions ---------------------------------- */
 
 export const adminActions = {
-  saveProduct(p: Product) {
-    const products = getState().products;
-    const exists = products.some((x) => x.id === p.id);
-    setState({
-      products: exists
-        ? products.map((x) => (x.id === p.id ? p : x))
-        : [{ ...p, id: p.id || uid("p") }, ...products],
+  async saveProduct(p: Product): Promise<void> {
+    mutate((s) => {
+      const exists = s.products.some((x) => x.id === p.id);
+      return {
+        products: exists
+          ? s.products.map((x) => (x.id === p.id ? p : x))
+          : [{ ...p, id: p.id || uid("p") }, ...s.products],
+      };
     });
   },
 
-  deleteProduct(id: string) {
-    setState({ products: getState().products.filter((p) => p.id !== id) });
+  async deleteProduct(id: string): Promise<void> {
+    mutate((s) => ({ products: s.products.filter((p) => p.id !== id) }));
   },
 
-  saveCategory(c: Category) {
-    const categories = getState().categories;
-    const exists = categories.some((x) => x.id === c.id);
-    setState({
-      categories: exists
-        ? categories.map((x) => (x.id === c.id ? c : x))
-        : [{ ...c, id: c.id || uid("c") }, ...categories],
+  async saveCategory(c: Category): Promise<void> {
+    mutate((s) => {
+      const exists = s.categories.some((x) => x.id === c.id);
+      return {
+        categories: exists
+          ? s.categories.map((x) => (x.id === c.id ? c : x))
+          : [{ ...c, id: c.id || uid("c") }, ...s.categories],
+      };
     });
   },
 
-  deleteCategory(id: string) {
-    const s = getState();
-    setState({
+  async deleteCategory(id: string): Promise<void> {
+    mutate((s) => ({
       categories: s.categories.filter((c) => c.id !== id),
       products: s.products.map((p) =>
         p.categoryId === id ? { ...p, categoryId: "" } : p,
       ),
-    });
+    }));
   },
 
-  createOrder(order: Order) {
-    setState({ orders: [{ ...order, id: order.id || uid("o") }, ...getState().orders] });
+  async createOrder(order: Order): Promise<void> {
+    mutate((s) => ({
+      orders: [{ ...order, id: order.id || uid("o") }, ...s.orders],
+    }));
   },
 
-  updateOrderStatus(id: string, status: OrderStatus, note?: string) {
-    setState({
-      orders: getState().orders.map((o) =>
+  async updateOrderStatus(id: string, status: OrderStatus, note?: string): Promise<void> {
+    mutate((s) => ({
+      orders: s.orders.map((o) =>
         o.id === id
           ? {
               ...o,
@@ -165,93 +80,130 @@ export const adminActions = {
             }
           : o,
       ),
+    }));
+  },
+
+  async saveCoupon(c: Coupon): Promise<void> {
+    mutate((s) => {
+      const exists = s.coupons.some((x) => x.id === c.id);
+      return {
+        coupons: exists
+          ? s.coupons.map((x) => (x.id === c.id ? c : x))
+          : [{ ...c, id: c.id || uid("cp") }, ...s.coupons],
+      };
     });
   },
 
-  saveCoupon(c: Coupon) {
-    const coupons = getState().coupons;
-    const exists = coupons.some((x) => x.id === c.id);
-    setState({
-      coupons: exists
-        ? coupons.map((x) => (x.id === c.id ? c : x))
-        : [{ ...c, id: c.id || uid("cp") }, ...coupons],
-    });
+  async deleteCoupon(id: string): Promise<void> {
+    mutate((s) => ({ coupons: s.coupons.filter((c) => c.id !== id) }));
   },
 
-  deleteCoupon(id: string) {
-    setState({ coupons: getState().coupons.filter((c) => c.id !== id) });
-  },
-
-  setCustomerStatus(id: string, status: Customer["status"]) {
-    setState({
-      customers: getState().customers.map((c) =>
-        c.id === id ? { ...c, status } : c,
-      ),
-    });
+  async setCustomerStatus(id: string, status: Customer["status"]): Promise<void> {
+    mutate((s) => ({
+      customers: s.customers.map((c) => (c.id === id ? { ...c, status } : c)),
+    }));
   },
 
   /** Receive new stock (+) for a product. */
-  receiveStock(productId: string, quantity: number, reason: string) {
-    const s = getState();
-    const movement: StockMovement = {
-      id: uid("sm"),
-      productId,
-      type: "in",
-      quantity: Math.abs(quantity),
-      reason,
-      createdAt: new Date().toISOString(),
-      createdBy: "admin",
-    };
-    setState({
-      movements: [movement, ...s.movements],
-      products: s.products.map((p) =>
-        p.id === productId ? { ...p, stock: p.stock + Math.abs(quantity) } : p,
-      ),
+  async receiveStock(productId: string, quantity: number, reason: string): Promise<void> {
+    mutate((s) => {
+      const movement: StockMovement = {
+        id: uid("sm"),
+        productId,
+        type: "in",
+        quantity: Math.abs(quantity),
+        reason,
+        createdAt: new Date().toISOString(),
+        createdBy: "admin",
+      };
+      return {
+        movements: [movement, ...s.movements],
+        products: s.products.map((p) =>
+          p.id === productId ? { ...p, stock: p.stock + Math.abs(quantity) } : p,
+        ),
+      };
     });
   },
 
   /** Adjust stock to an absolute value (records the delta). */
-  adjustStock(productId: string, newStock: number, reason: string) {
-    const s = getState();
-    const product = s.products.find((p) => p.id === productId);
-    if (!product) return;
-    const delta = newStock - product.stock;
-    if (delta === 0) return;
-    const movement: StockMovement = {
-      id: uid("sm"),
-      productId,
-      type: "adjust",
-      quantity: delta,
-      reason,
-      createdAt: new Date().toISOString(),
-      createdBy: "admin",
-    };
-    setState({
-      movements: [movement, ...s.movements],
-      products: s.products.map((p) =>
-        p.id === productId ? { ...p, stock: newStock } : p,
-      ),
+  async adjustStock(productId: string, newStock: number, reason: string): Promise<void> {
+    mutate((s) => {
+      const product = s.products.find((p) => p.id === productId);
+      if (!product) return;
+      const delta = newStock - product.stock;
+      if (delta === 0) return;
+      const movement: StockMovement = {
+        id: uid("sm"),
+        productId,
+        type: "adjust",
+        quantity: delta,
+        reason,
+        createdAt: new Date().toISOString(),
+        createdBy: "admin",
+      };
+      return {
+        movements: [movement, ...s.movements],
+        products: s.products.map((p) =>
+          p.id === productId ? { ...p, stock: newStock } : p,
+        ),
+      };
     });
   },
 
-  updateSettings(patch: Partial<StoreSettings>) {
-    setState({ settings: { ...getState().settings, ...patch } });
+  async updateSettings(patch: Partial<StoreSettings>): Promise<void> {
+    mutate((s) => ({ settings: { ...s.settings, ...patch } }));
   },
 
-  resetDemo() {
-    state = seed();
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      /* ignore */
-    }
-    emit();
+  async resetDemo(): Promise<void> {
+    resetStore();
+  },
+
+  /* ------------------------------- Read-only -------------------------------- */
+
+  async getProducts(): Promise<Product[]> {
+    return getStoreState().products;
+  },
+
+  async getProductById(id: string): Promise<Product | undefined> {
+    return getStoreState().products.find((p) => p.id === id);
+  },
+
+  async getCategories(): Promise<Category[]> {
+    return getStoreState().categories;
+  },
+
+  async getOrders(): Promise<Order[]> {
+    return getStoreState().orders;
+  },
+
+  async getOrderById(id: string): Promise<Order | undefined> {
+    return getStoreState().orders.find((o) => o.id === id);
+  },
+
+  async getCoupons(): Promise<Coupon[]> {
+    return getStoreState().coupons;
+  },
+
+  async getCustomers(): Promise<Customer[]> {
+    return getStoreState().customers;
+  },
+
+  async getMovements(): Promise<StockMovement[]> {
+    return getStoreState().movements;
+  },
+
+  async getSettings(): Promise<StoreSettings> {
+    return getStoreState().settings;
+  },
+
+  async getDashboard(): Promise<DashboardSummary> {
+    return computeDashboard(getStoreState());
   },
 };
 
 /* -------------------------------- Dashboard ---------------------------------- */
 
-export function computeDashboard(s: AdminState): DashboardSummary {
+export function computeDashboard(s: StoreStateType): DashboardSummary {
   const revenue = s.orders
     .filter((o) => o.status !== "cancelled")
     .reduce((sum, o) => sum + o.total, 0);
@@ -267,12 +219,8 @@ export function computeDashboard(s: AdminState): DashboardSummary {
     count: s.orders.filter((o) => o.status === status).length,
   }));
 
-  const prevRevenue = seedDailyRevenue
-    .slice(0, 7)
-    .reduce((sum, d) => sum + d.revenue, 0);
-  const curRevenue = seedDailyRevenue
-    .slice(7)
-    .reduce((sum, d) => sum + d.revenue, 0);
+  const prevRevenue = s.dailyRevenue.slice(0, 7).reduce((sum, d) => sum + d.revenue, 0);
+  const curRevenue = s.dailyRevenue.slice(7).reduce((sum, d) => sum + d.revenue, 0);
 
   return {
     revenue,
@@ -281,7 +229,7 @@ export function computeDashboard(s: AdminState): DashboardSummary {
     ordersChange: 12.5,
     products: s.products.length,
     lowStock,
-    dailyRevenue: seedDailyRevenue,
+    dailyRevenue: s.dailyRevenue,
     statusDistribution,
     recentOrders,
     bestSellers,
@@ -290,7 +238,16 @@ export function computeDashboard(s: AdminState): DashboardSummary {
 
 /* ---------------------------------- Hook ------------------------------------- */
 
+/** Reactive admin state — re-renders on every store mutation. */
 export function useAdmin() {
-  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const state = useStoreState();
   return { state, actions: adminActions, dashboard: computeDashboard(state) };
+}
+
+/** Version counter — dùng để trigger fetch lại sau mutation. */
+export { useStoreVersion };
+
+/** Đọc state hiện tại (hữu ích cho test/debug). Component nên dùng useAdmin(). */
+export function getAdminState(): StoreStateType {
+  return getStoreState();
 }
