@@ -16,12 +16,21 @@ import app.db.models  # noqa: F401  (register all entities for relationships)
 async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.APP_NAME} (env={settings.APP_ENV})")
     # Auto-run migrations on startup (for Railway deployment)
+    # NOTE: backend/alembic/ (local migrations folder) shadows the pip 'alembic'
+    # package, so temporarily drop backend_dir from sys.path to import the real one.
     try:
-        from alembic import command
-        from alembic.config import Config
-        import os
-        alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "..", "alembic.ini"))
-        command.upgrade(alembic_cfg, "head")
+        import sys as _sys
+        import os as _os
+        _backend_dir = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), ".."))
+        _orig_path = _sys.path[:]
+        _sys.path = [p for p in _sys.path if _os.path.abspath(p or ".") != _backend_dir]
+        try:
+            from alembic import command as _alembic_command
+            from alembic.config import Config as _AlembicConfig
+        finally:
+            _sys.path = _orig_path
+        _alembic_cfg = _AlembicConfig(_os.path.join(_backend_dir, "alembic.ini"))
+        _alembic_command.upgrade(_alembic_cfg, "head")
         logger.info("Database migrations applied successfully")
     except Exception as e:
         logger.warning(f"Migration failed (may already be applied): {e}")
