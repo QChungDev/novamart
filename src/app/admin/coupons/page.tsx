@@ -82,7 +82,7 @@ export default function AdminCouponsPage() {
     return Object.keys(e).length === 0;
   };
 
-  const save = () => {
+  const save = async () => {
     if (!validate()) return;
     const payload: Coupon = {
       id: editing?.id ?? `cp-${Date.now().toString(36)}`,
@@ -97,7 +97,7 @@ export default function AdminCouponsPage() {
       endDate: new Date(form.endDate).toISOString(),
       status: form.status,
     };
-    actions.saveCoupon(payload);
+    await actions.saveCoupon(payload);
     toast(editing ? "Cập nhật mã giảm giá thành công!" : "Thêm mã giảm giá thành công!");
     setModalOpen(false);
   };
@@ -232,9 +232,9 @@ export default function AdminCouponsPage() {
       <ConfirmDialog
         open={!!deleting}
         onClose={() => setDeleting(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (deleting) {
-            actions.deleteCoupon(deleting.id);
+            await actions.deleteCoupon(deleting.id);
             toast(`Đã xóa mã "${deleting.code}".`, "info");
             setDeleting(null);
           }

@@ -51,7 +51,7 @@ export default function AdminCategoriesPage() {
     return Object.keys(e).length === 0;
   };
 
-  const save = () => {
+  const save = async () => {
     if (!validate()) return;
     const payload: Category = {
       id: editing?.id ?? `c-${Date.now().toString(36)}`,
@@ -60,7 +60,7 @@ export default function AdminCategoriesPage() {
       image: form.image.trim() || "https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&w=800&q=80",
       description: form.description.trim(),
     };
-    actions.saveCategory(payload);
+    await actions.saveCategory(payload);
     toast(editing ? "Cập nhật danh mục thành công!" : "Thêm danh mục mới thành công!");
     setModalOpen(false);
   };
@@ -156,9 +156,9 @@ export default function AdminCategoriesPage() {
       <ConfirmDialog
         open={!!deleting}
         onClose={() => setDeleting(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (deleting) {
-            actions.deleteCategory(deleting.id);
+            await actions.deleteCategory(deleting.id);
             toast(`Đã xóa danh mục "${deleting.name}".`, "info");
             setDeleting(null);
           }

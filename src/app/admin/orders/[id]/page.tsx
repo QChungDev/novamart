@@ -54,8 +54,8 @@ function AdminOrderDetailContent({ params }: { params: Promise<{ id: string }> }
   const next = NEXT_STATUS[order.status];
   const canCancel = order.status === "pending" || order.status === "confirmed";
 
-  const applyStatus = (status: OrderStatus) => {
-    actions.updateOrderStatus(order.id, status, `Admin cập nhật: ${orderStatusLabel(status)}`);
+  const applyStatus = async (status: OrderStatus) => {
+    await actions.updateOrderStatus(order.id, status, `Admin cập nhật: ${orderStatusLabel(status)}`);
     toast(`Đã chuyển đơn ${order.code} sang "${orderStatusLabel(status)}".`);
     setConfirming(null);
   };

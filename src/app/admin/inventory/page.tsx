@@ -33,7 +33,7 @@ export default function AdminInventoryPage() {
     setError("");
   };
 
-  const doReceive = () => {
+  const doReceive = async () => {
     const n = Number(qty);
     if (!qty || Number.isNaN(n) || n <= 0 || !Number.isInteger(n)) {
       setError("Số lượng nhập phải là số nguyên dương.");
@@ -44,14 +44,14 @@ export default function AdminInventoryPage() {
       return;
     }
     if (receiveTarget) {
-      actions.receiveStock(receiveTarget.id, n, reason.trim());
+      await actions.receiveStock(receiveTarget.id, n, reason.trim());
       toast(`Đã nhập ${n} sản phẩm "${receiveTarget.name}" vào kho.`);
     }
     setReceiveTarget(null);
     resetModal();
   };
 
-  const doAdjust = () => {
+  const doAdjust = async () => {
     const n = Number(qty);
     if (qty === "" || Number.isNaN(n) || n < 0 || !Number.isInteger(n)) {
       setError("Tồn kho mới phải là số nguyên không âm.");
@@ -62,7 +62,7 @@ export default function AdminInventoryPage() {
       return;
     }
     if (adjustTarget) {
-      actions.adjustStock(adjustTarget.id, n, reason.trim());
+      await actions.adjustStock(adjustTarget.id, n, reason.trim());
       toast(`Đã điều chỉnh tồn kho "${adjustTarget.name}" thành ${n}.`);
     }
     setAdjustTarget(null);

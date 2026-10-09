@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -8,7 +8,7 @@ import { Banknote, CheckCircle2, CreditCard, ShoppingCart, Truck, Wallet, Zap } 
 import { useCart } from "@/lib/store/cart-store";
 import { useAuth } from "@/lib/store/auth-store";
 import { adminActions } from "@/lib/services/admin";
-import { validateCoupon, shippingFeeFor } from "@/lib/services/pricing";
+import { validateCoupon, shippingFeeFor, type CouponCheck } from "@/lib/services/pricing";
 import { formatVND, generateOrderCode } from "@/lib/format";
 import { Breadcrumbs } from "@/components/ui/data";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,25 @@ export default function CheckoutPage() {
   const [couponError, setCouponError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
+  const [couponCheck, setCouponCheck] = useState<CouponCheck | null>(null);
+  const [shippingFee, setShippingFee] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const c = appliedCode ? await validateCoupon(appliedCode, subtotal) : null;
+      if (!alive) return;
+      setCouponCheck(c);
+      const discount = c && c.ok ? c.discount : 0;
+      setShippingFee(await shippingFeeFor(form.shippingMethod, subtotal - discount));
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [appliedCode, subtotal, form.shippingMethod]);
+
+  const discount = couponCheck && couponCheck.ok ? couponCheck.discount : 0;
+  const total = subtotal - discount + shippingFee;
 
   const set = (patch: Partial<FormState>) => {
     setForm((f) => ({ ...f, ...patch }));
@@ -75,14 +94,6 @@ export default function CheckoutPage() {
       return next;
     });
   };
-
-  const couponCheck = appliedCode ? validateCoupon(appliedCode, subtotal) : null;
-  const discount = couponCheck && couponCheck.ok ? couponCheck.discount : 0;
-  const shippingFee = useMemo(
-    () => shippingFeeFor(form.shippingMethod, subtotal - discount),
-    [form.shippingMethod, subtotal, discount],
-  );
-  const total = subtotal - discount + shippingFee;
 
   const validate = (): boolean => {
     const e: Partial<Record<keyof FormState, string>> = {};
@@ -96,12 +107,12 @@ export default function CheckoutPage() {
     return Object.keys(e).length === 0;
   };
 
-  const applyCoupon = () => {
+  const applyCoupon = async () => {
     if (!couponCode.trim()) {
       setCouponError("Vui lòng nhập mã giảm giá.");
       return;
     }
-    const result = validateCoupon(couponCode, subtotal);
+    const result = await validateCoupon(couponCode, subtotal);
     if (result.ok) {
       setAppliedCode(result.coupon.code);
       setCouponError("");
@@ -148,7 +159,7 @@ export default function CheckoutPage() {
       createdAt: new Date().toISOString(),
       timeline: [{ status: "pending", at: new Date().toISOString(), note: "Khách hàng đặt đơn (demo)" }],
     };
-    adminActions.createOrder(order);
+    await adminActions.createOrder(order);
     clear();
     setSubmitting(false);
     setPlacedOrder({ ...order });

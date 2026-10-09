@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { SlidersHorizontal } from "lucide-react";
 import { shopService } from "@/lib/services/shop";
+import { useStoreQuery } from "@/lib/data/use-store-query";
 import { Breadcrumbs, Pagination } from "@/components/ui/data";
 import { EmptyState, Spinner } from "@/components/ui/feedback";
 import { ProductCard } from "@/components/storefront/ProductCard";
@@ -39,26 +40,39 @@ function ListingClient() {
 
   const q = searchParams.get("q") ?? "";
 
-  const { items, total } = useMemo(
-    () =>
-      shopService.getProducts({
-        q,
-        categorySlug: filters.categorySlug || undefined,
-        minPrice: filters.minPrice,
-        maxPrice: filters.maxPrice,
-        inStockOnly: filters.inStockOnly,
-        onSaleOnly: filters.onSaleOnly,
-        sort: filters.sort,
-        page,
-        pageSize: PAGE_SIZE,
-      }),
-    [q, filters, page],
+  const filterKey = JSON.stringify({
+    q,
+    ...filters,
+    page,
+    pageSize: PAGE_SIZE,
+  });
+
+  const listing = useStoreQuery("products-" + filterKey, () =>
+    shopService.getProducts({
+      q,
+      categorySlug: filters.categorySlug || undefined,
+      minPrice: filters.minPrice,
+      maxPrice: filters.maxPrice,
+      inStockOnly: filters.inStockOnly,
+      onSaleOnly: filters.onSaleOnly,
+      sort: filters.sort,
+      page,
+      pageSize: PAGE_SIZE,
+    }),
   );
 
+  const items = listing?.items ?? [];
+  const total = listing?.total ?? 0;
+
   const totalPages = Math.ceil(total / PAGE_SIZE);
-  const category = filters.categorySlug
-    ? shopService.getCategoryBySlug(filters.categorySlug)
-    : undefined;
+
+  const category = useStoreQuery(
+    "cat-" + (filters.categorySlug || "none"),
+    () =>
+      filters.categorySlug
+        ? shopService.getCategoryBySlug(filters.categorySlug)
+        : Promise.resolve(undefined),
+  );
 
   const removeFilter = (key: keyof FilterState) => {
     if (key === "minPrice") setFilters((f) => ({ ...f, minPrice: undefined, maxPrice: undefined }));

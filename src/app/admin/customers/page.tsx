@@ -124,10 +124,10 @@ export default function AdminCustomersPage() {
       <ConfirmDialog
         open={!!target}
         onClose={() => setTarget(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (target) {
             const next = target.status === "active" ? "blocked" : "active";
-            actions.setCustomerStatus(target.id, next);
+            await actions.setCustomerStatus(target.id, next);
             toast(
               next === "blocked"
                 ? `Đã khóa tài khoản "${target.name}".`

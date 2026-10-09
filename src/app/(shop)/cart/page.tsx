@@ -1,17 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, ShoppingCart, Tag, Trash2, X } from "lucide-react";
 import { useCart } from "@/lib/store/cart-store";
 import { useToast } from "@/lib/store/toast-store";
-import { validateCoupon, shippingFeeFor } from "@/lib/services/pricing";
+import { validateCoupon, shippingFeeFor, type CouponCheck } from "@/lib/services/pricing";
+import { adminActions } from "@/lib/services/admin";
 import { formatVND } from "@/lib/format";
 import { Breadcrumbs, QuantitySelector } from "@/components/ui/data";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
-import { defaultSettings } from "@/lib/mock-data";
 
 export default function CartPage() {
   const { lines, count, subtotal, setQuantity, removeItem, clear } = useCart();
@@ -19,17 +19,42 @@ export default function CartPage() {
   const [couponCode, setCouponCode] = useState("");
   const [appliedCode, setAppliedCode] = useState<string | null>(null);
   const [couponError, setCouponError] = useState("");
+  const [check, setCheck] = useState<CouponCheck | null>(null);
+  const [shippingFee, setShippingFee] = useState(0);
+  const [freeShipThreshold, setFreeShipThreshold] = useState(500000);
 
-  const check = appliedCode ? validateCoupon(appliedCode, subtotal) : null;
+  useEffect(() => {
+    let alive = true;
+    adminActions.getSettings().then((s) => {
+      if (alive) setFreeShipThreshold(s.freeShippingThreshold);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const c = appliedCode ? await validateCoupon(appliedCode, subtotal) : null;
+      if (!alive) return;
+      setCheck(c);
+      const discount = c && c.ok ? c.discount : 0;
+      setShippingFee(await shippingFeeFor("standard", subtotal - discount));
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [appliedCode, subtotal]);
+
   const discount = check && check.ok ? check.discount : 0;
-  const shippingFee = shippingFeeFor("standard", subtotal - discount);
 
-  const applyCoupon = () => {
+  const applyCoupon = async () => {
     if (!couponCode.trim()) {
       setCouponError("Vui lòng nhập mã giảm giá.");
       return;
     }
-    const result = validateCoupon(couponCode, subtotal);
+    const result = await validateCoupon(couponCode, subtotal);
     if (result.ok) {
       setAppliedCode(result.coupon.code);
       setCouponError("");
@@ -210,7 +235,7 @@ export default function CartPage() {
               </Button>
             </Link>
             <p className="mt-3 text-center text-xs text-ink-400">
-              Miễn phí vận chuyển cho đơn từ {formatVND(defaultSettings.freeShippingThreshold)}
+              Miễn phí vận chuyển cho đơn từ {formatVND(freeShipThreshold)}
             </p>
           </div>
         </div>
