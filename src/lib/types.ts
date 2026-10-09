@@ -7,7 +7,7 @@
 /* ---------------------------------- Catalog --------------------------------- */
 
 export interface Category {
-  id: string;
+  id: number;
   name: string;
   slug: string;
   image: string;
@@ -22,11 +22,11 @@ export interface ProductSpec {
 }
 
 export interface Product {
-  id: string;
+  id: number;
   name: string;
   slug: string;
   sku: string;
-  categoryId: string;
+  categoryId: number | null;
   price: number; // VND
   salePrice?: number; // VND, when on sale
   images: string[];
@@ -45,8 +45,8 @@ export interface Product {
 }
 
 export interface Review {
-  id: string;
-  productId: string;
+  id: number;
+  productId: number;
   author: string;
   rating: number;
   title: string;
@@ -58,7 +58,7 @@ export interface Review {
 /* ----------------------------------- Cart ----------------------------------- */
 
 export interface CartItem {
-  productId: string;
+  productId: number;
   quantity: number;
 }
 
@@ -70,7 +70,7 @@ export interface CartLine extends CartItem {
 /* ---------------------------------- Customer --------------------------------- */
 
 export interface Address {
-  id: string;
+  id: number;
   label: string; // e.g. "Nhà riêng", "Công ty"
   receiver: string;
   phone: string;
@@ -81,7 +81,7 @@ export interface Address {
 }
 
 export interface Customer {
-  id: string;
+  id: number;
   name: string;
   email: string;
   phone: string;
@@ -93,7 +93,7 @@ export interface Customer {
 }
 
 export interface AuthUser {
-  id: string;
+  id: number;
   name: string;
   email: string;
   phone: string;
@@ -112,7 +112,7 @@ export type PaymentMethod = "cod" | "demo_card" | "demo_wallet";
 export type ShippingMethod = "standard" | "express";
 
 export interface OrderItem {
-  productId: string;
+  productId: number;
   name: string;
   image: string;
   price: number; // VND unit price at purchase time
@@ -126,9 +126,9 @@ export interface OrderTimelineStep {
 }
 
 export interface Order {
-  id: string;
+  id: number;
   code: string; // e.g. NM-20261009-4F8K2
-  customerId?: string;
+  customerId?: number;
   customerName: string;
   phone: string;
   email: string;
@@ -154,7 +154,7 @@ export interface Order {
 export type CouponType = "percent" | "fixed";
 
 export interface Coupon {
-  id: string;
+  id: number;
   code: string;
   description: string;
   type: CouponType;
@@ -172,8 +172,8 @@ export interface Coupon {
 export type StockMovementType = "in" | "out" | "adjust";
 
 export interface StockMovement {
-  id: string;
-  productId: string;
+  id: number;
+  productId: number;
   type: StockMovementType;
   quantity: number; // signed: +in, -out
   reason: string;
