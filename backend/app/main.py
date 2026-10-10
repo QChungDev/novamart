@@ -15,6 +15,7 @@ import app.db.models  # noqa: F401  (register all entities for relationships)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.APP_NAME} (env={settings.APP_ENV})")
+    logger.info(f"DB dialect check: {settings.DATABASE_URL.split('://')[0]}")
     # Auto-run migrations on startup (for Railway deployment)
     # NOTE: backend/alembic/ (local migrations folder) shadows the pip 'alembic'
     # package, so temporarily drop backend_dir from sys.path to import the real one.
