@@ -31,8 +31,12 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    section = config.get_section(config.config_ini_section, {})
+    # Timeout cho PostgreSQL để không treo khi không kết nối được
+    if settings.DATABASE_URL.startswith("postgresql"):
+        section["sqlalchemy.connect_args"] = {"connect_timeout": 10}
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        section,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
