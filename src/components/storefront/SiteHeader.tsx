@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Heart, Menu, Search, ShoppingCart, User, X } from "lucide-react";
+import { Heart, LayoutDashboard, Menu, Search, ShoppingCart, User, X } from "lucide-react";
 import { shopService } from "@/lib/services/shop";
 import { useStoreQuery } from "@/lib/data/use-api-query";
 import { useCart } from "@/lib/store/cart-store";
@@ -14,7 +14,7 @@ import type { Category } from "@/lib/types";
 export function SiteHeader() {
   const router = useRouter();
   const { count } = useCart();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [q, setQ] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const data = useStoreQuery<Category[]>("header-categories", () =>
@@ -73,8 +73,9 @@ export function SiteHeader() {
             </button>
           </div>
         </form>
+        
 
-        <div className="ml-auto flex items-center gap-1 md:ml-0">
+        <div className="ml-auto flex items-center gap-1 md:ml-0">{isAdmin && (<Link href="/admin" className="hidden items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 sm:flex"><LayoutDashboard className="h-5 w-5" /><span>Quản trị</span></Link>)}
           <Link
             href={user ? "/account" : "/login"}
             className="hidden items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-ink-700 hover:bg-slate-100 sm:flex"
@@ -164,7 +165,7 @@ export function SiteHeader() {
               <User className="h-4 w-4" /> {user.name}
             </Link>
           )}
-          <p className="px-2 pb-1 pt-2 text-xs font-bold uppercase tracking-wide text-ink-400">
+          {isAdmin && (<Link href="/admin" onClick={() => setMenuOpen(false)} className="flex items-center gap-2 rounded-lg px-2 py-3 text-sm font-semibold text-brand-700"><LayoutDashboard className="h-4 w-4" /> Quản trị</Link>)}<p className="px-2 pb-1 pt-2 text-xs font-bold uppercase tracking-wide text-ink-400">
             Danh mục
           </p>
           {categories.map((c) => (
