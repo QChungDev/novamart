@@ -12,7 +12,15 @@ class Base(DeclarativeBase):
 def _engine_kwargs() -> dict:
     if settings.is_sqlite:
         return {"connect_args": {"check_same_thread": False}}
-    return {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 10}
+    # Supabase pooler (PgBouncer, transaction mode) KHONG ho tro prepared statement
+    # phia server cua psycopg3 -> tat han de tranh loi DuplicatePreparedStatement
+    # khi khoi dong (init_db) cung nhu trong qua trinh chay.
+    return {
+        "pool_pre_ping": True,
+        "pool_size": 5,
+        "max_overflow": 10,
+        "connect_args": {"prepare_threshold": None},
+    }
 
 
 engine = create_engine(settings.DATABASE_URL, **_engine_kwargs())
