@@ -1,37 +1,45 @@
-"""Centralized application settings (12-factor: everything via environment)."""
-
+"""Cau hinh ung dung doc tu bien moi truong."""
 from functools import lru_cache
-from typing import Literal
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    APP_ENV: Literal["development", "testing", "production"] = "development"
-    APP_NAME: str = "NovaMart API"
-    LOG_LEVEL: str = "INFO"
+    APP_NAME: str = "AI Shorts Studio"
+    APP_ENV: str = "dev"
+    SECRET_KEY: str = "change-me-generate-a-real-one"
+    DATABASE_URL: str = "sqlite:///./data/app.db"
+    MEDIA_ROOT: str = "./data/media"
+    CORS_ORIGINS: str = "http://localhost:3000"
 
-    DATABASE_URL: str = "mysql+pymysql://novamart:novamart_secret@127.0.0.1:3306/novamart?charset=utf8mb4"
+    MAX_IMAGE_MB: int = 10
+    MAX_VIDEO_MB: int = 500
+    MAX_AUDIO_MB: int = 50
 
-    SECRET_KEY: str = "change-me-to-a-long-random-secret-key"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    DEFAULT_SCENE_SECONDS: int = 20
 
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    SEEDANCE_API_KEY: str = ""
+    SEEDANCE_BASE_URL: str = "https://ark.ap-southeast.bytepluses.com/api/v3"
+    SEEDANCE_MODEL: str = "dreamina-seedance-2-5-260628"
 
-    ADMIN_EMAIL: str = ""
-    ADMIN_PASSWORD: str = ""
-    ADMIN_NAME: str = "Administrator"
+    WORKER_POLL_SECONDS: int = 5
 
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
     @property
-    def is_production(self) -> bool:
-        return self.APP_ENV == "production"
+    def media_root_path(self) -> Path:
+        p = Path(self.MEDIA_ROOT)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @property
+    def is_sqlite(self) -> bool:
+        return self.DATABASE_URL.startswith("sqlite")
 
 
 @lru_cache
